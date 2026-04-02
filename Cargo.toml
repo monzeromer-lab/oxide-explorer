@@ -20,5 +20,5 @@ dirs = "6"
 vte4 = { version = "0.8", optional = true }
 
 [features]
-default = []
+default = ["terminal"]
 terminal = ["vte4"]

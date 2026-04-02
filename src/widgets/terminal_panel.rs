@@ -1,4 +1,6 @@
 use gtk::prelude::*;
+#[cfg(feature = "terminal")]
+use vte4::prelude::*;
 use std::path::Path;
 
 pub struct TerminalPanel {
@@ -47,7 +49,7 @@ impl TerminalPanel {
                 || {},
                 -1,
                 gio::Cancellable::NONE,
-                |_terminal, _result| {},
+                |_result| {},
             );
 
             let scrolled = gtk::ScrolledWindow::new();

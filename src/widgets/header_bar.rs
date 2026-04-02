@@ -57,7 +57,12 @@ impl HeaderBar {
         let settings_section = gio::Menu::new();
         settings_section.append(Some("Preferences"), Some("win.preferences"));
         settings_section.append(Some("Keyboard Shortcuts"), Some("win.show-shortcuts"));
+        settings_section.append(Some("User Guide"), Some("win.show-guide"));
         primary_menu.append_section(None, &settings_section);
+
+        let about_section = gio::Menu::new();
+        about_section.append(Some("About Oxide Explorer"), Some("win.about"));
+        primary_menu.append_section(None, &about_section);
 
         let menu_button = gtk::MenuButton::new();
         menu_button.set_icon_name("open-menu-symbolic");

@@ -1075,6 +1075,22 @@ fn setup_actions(
     sk.connect_activate(move |_, _| { show_shortcuts_window(&win); });
     window.add_action(&sk);
 
+    // --- User Guide ---
+    let win = window.clone();
+    let guide_action = gio::SimpleAction::new("show-guide", None);
+    guide_action.connect_activate(move |_, _| {
+        crate::widgets::guide_window::show_guide(&win);
+    });
+    window.add_action(&guide_action);
+
+    // --- About ---
+    let win = window.clone();
+    let about_action = gio::SimpleAction::new("about", None);
+    about_action.connect_activate(move |_, _| {
+        crate::widgets::about_dialog::show_about(&win);
+    });
+    window.add_action(&about_action);
+
     // --- Keyboard shortcuts ---
     let sc = gtk::ShortcutController::new();
     sc.set_scope(gtk::ShortcutScope::Managed);
@@ -1092,6 +1108,7 @@ fn setup_actions(
         ("F4", "win.toggle-terminal"),
         ("F3", "win.toggle-dual-pane"),
         ("F5", "win.toggle-miller"),
+        ("F1", "win.show-guide"),
         ("Return", "win.activate-item"),
     ];
 

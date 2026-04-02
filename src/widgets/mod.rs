@@ -11,3 +11,5 @@ pub mod preferences_window;
 pub mod terminal_panel;
 pub mod dual_pane;
 pub mod miller_columns;
+pub mod guide_window;
+pub mod about_dialog;
