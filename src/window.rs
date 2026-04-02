@@ -419,7 +419,9 @@ impl OxideWindow {
         miller_revealer.set_transition_type(gtk::RevealerTransitionType::Crossfade);
 
         // --- Layout ---
-        // Main content area: tab_view + dual_pane + miller (stacked)
+        // Main content area: tab_view (expands) + dual_pane + miller + terminal (all revealers)
+        tab_view.set_vexpand(true);
+
         let main_stack = gtk::Box::new(gtk::Orientation::Vertical, 0);
         main_stack.append(&tab_view);
         main_stack.append(&dual_pane.widget);

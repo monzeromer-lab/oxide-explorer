@@ -87,6 +87,7 @@ impl TabState {
         });
 
         // Container
+        content.outer_stack.set_vexpand(true);
         let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
         container.append(&filter_bar.widget);
         container.append(&content.outer_stack);
