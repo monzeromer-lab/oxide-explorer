@@ -8,3 +8,6 @@ pub mod status_bar;
 pub mod filter_bar;
 pub mod properties_dialog;
 pub mod preferences_window;
+pub mod terminal_panel;
+pub mod dual_pane;
+pub mod miller_columns;

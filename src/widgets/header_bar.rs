@@ -47,8 +47,17 @@ impl HeaderBar {
 
         // Hamburger menu
         let primary_menu = gio::Menu::new();
-        primary_menu.append(Some("Preferences"), Some("win.preferences"));
-        primary_menu.append(Some("Keyboard Shortcuts"), Some("win.show-shortcuts"));
+
+        let view_section = gio::Menu::new();
+        view_section.append(Some("Toggle Terminal (F4)"), Some("win.toggle-terminal"));
+        view_section.append(Some("Dual Pane (F3)"), Some("win.toggle-dual-pane"));
+        view_section.append(Some("Miller Columns (F5)"), Some("win.toggle-miller"));
+        primary_menu.append_section(None, &view_section);
+
+        let settings_section = gio::Menu::new();
+        settings_section.append(Some("Preferences"), Some("win.preferences"));
+        settings_section.append(Some("Keyboard Shortcuts"), Some("win.show-shortcuts"));
+        primary_menu.append_section(None, &settings_section);
 
         let menu_button = gtk::MenuButton::new();
         menu_button.set_icon_name("open-menu-symbolic");

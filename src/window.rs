@@ -11,11 +11,15 @@ use crate::state::selection::{ClipboardOp, ClipboardState};
 use crate::state::settings::Settings;
 use crate::state::tab::TabState;
 use crate::utils::runtime;
+use crate::state::keybindings::KeybindingConfig;
 use crate::widgets::breadcrumb::BreadcrumbBar;
 use crate::widgets::content_view::ContentView;
+use crate::widgets::dual_pane::DualPane;
 use crate::widgets::header_bar::HeaderBar;
+use crate::widgets::miller_columns::MillerColumnsView;
 use crate::widgets::sidebar::Sidebar;
 use crate::widgets::status_bar::StatusBar;
+use crate::widgets::terminal_panel::TerminalPanel;
 
 pub struct OxideWindow {
     pub window: adw::ApplicationWindow,
@@ -403,11 +407,29 @@ impl OxideWindow {
             glib::Propagation::Stop
         });
 
+        // --- Phase 2 widgets ---
+        let terminal = Rc::new(TerminalPanel::new());
+        let dual_pane = Rc::new(DualPane::new(show_hidden.clone(), icon_size.clone()));
+        let miller = Rc::new(MillerColumnsView::new(|path| { open_file(&path); }));
+
+        // Miller columns revealer
+        let miller_revealer = gtk::Revealer::new();
+        miller_revealer.set_child(Some(&miller.widget));
+        miller_revealer.set_reveal_child(false);
+        miller_revealer.set_transition_type(gtk::RevealerTransitionType::Crossfade);
+
         // --- Layout ---
+        // Main content area: tab_view + dual_pane + miller (stacked)
+        let main_stack = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        main_stack.append(&tab_view);
+        main_stack.append(&dual_pane.widget);
+        main_stack.append(&miller_revealer);
+        main_stack.append(&terminal.widget);
+
         let paned = gtk::Paned::new(gtk::Orientation::Horizontal);
         paned.set_position(200);
         paned.set_start_child(Some(&sidebar.widget));
-        paned.set_end_child(Some(&tab_view));
+        paned.set_end_child(Some(&main_stack));
         paned.set_shrink_start_child(false);
         paned.set_resize_start_child(false);
 
@@ -435,6 +457,10 @@ impl OxideWindow {
             &create_tab,
             &tab_view,
             &tabs,
+            &terminal,
+            &dual_pane,
+            &miller,
+            &miller_revealer,
         );
 
         // --- Create initial tab ---
@@ -469,6 +495,19 @@ fn open_file(path: &PathBuf) {
     launcher.launch(gtk::Window::NONE, gio::Cancellable::NONE, |result| {
         if let Err(e) = result { log::warn!("Failed to open file: {e}"); }
     });
+}
+
+/// Public wrapper for dual_pane to call
+pub fn load_path_async_pub(
+    path: PathBuf,
+    model: FileListModel,
+    status: Rc<StatusBar>,
+    monitor: Rc<RefCell<Option<DirectoryMonitor>>>,
+    content: Rc<ContentView>,
+    filter: gtk::CustomFilter,
+    filter_model: gtk::FilterListModel,
+) {
+    load_path_async(path, model, status, monitor, content, filter, filter_model);
 }
 
 fn load_path_async(
@@ -594,6 +633,10 @@ fn setup_actions(
     create_tab: &CreateTabFn,
     tab_view: &adw::TabView,
     tabs: &Rc<RefCell<Vec<Rc<TabState>>>>,
+    terminal: &Rc<TerminalPanel>,
+    dual_pane: &Rc<DualPane>,
+    miller: &Rc<MillerColumnsView>,
+    miller_revealer: &gtk::Revealer,
 ) {
     // Helper macro to reduce boilerplate
     macro_rules! active_sel {
@@ -898,6 +941,134 @@ fn setup_actions(
     pref.connect_activate(move |_, _| { crate::widgets::preferences_window::show_preferences(&win, s.clone()); });
     window.add_action(&pref);
 
+    // --- Toggle Terminal (F4) ---
+    let term = terminal.clone();
+    let gat2 = get_active_tab.clone();
+    let toggle_term = gio::SimpleAction::new("toggle-terminal", None);
+    toggle_term.connect_activate(move |_, _| {
+        term.toggle();
+        // Sync terminal to current directory
+        if term.is_visible() {
+            if let Some(tab) = gat2() {
+                term.cd(&tab.current_path());
+            }
+        }
+    });
+    window.add_action(&toggle_term);
+
+    // --- Toggle Dual Pane (F3) ---
+    let dp = dual_pane.clone();
+    let gat3 = get_active_tab.clone();
+    let toggle_dual = gio::SimpleAction::new("toggle-dual-pane", None);
+    toggle_dual.connect_activate(move |_, _| {
+        dp.toggle();
+        if dp.is_visible() {
+            if let Some(tab) = gat3() {
+                let path = tab.current_path();
+                dp.left.load_directory(path.clone());
+                dp.right.load_directory(path);
+            }
+        }
+    });
+    window.add_action(&toggle_dual);
+
+    // --- Toggle Miller Columns (F5) ---
+    let mr = miller_revealer.clone();
+    let ml = miller.clone();
+    let gat4 = get_active_tab.clone();
+    let toggle_miller = gio::SimpleAction::new("toggle-miller", None);
+    toggle_miller.connect_activate(move |_, _| {
+        let visible = mr.reveals_child();
+        mr.set_reveal_child(!visible);
+        if !visible {
+            if let Some(tab) = gat4() {
+                ml.navigate_to(tab.current_path());
+            }
+        }
+    });
+    window.add_action(&toggle_miller);
+
+    // --- Vim-mode navigation helpers ---
+    // select-next / select-prev for j/k navigation
+    let gat5 = get_active_tab.clone();
+    let sel_next = gio::SimpleAction::new("select-next", None);
+    sel_next.connect_activate(move |_, _| {
+        if let Some(tab) = gat5() {
+            let sel = &tab.selection_model;
+            let n = sel.n_items();
+            if n == 0 { return; }
+            // Find first selected, move to next
+            let mut current = 0;
+            for i in 0..n { if sel.is_selected(i) { current = i; break; } }
+            let next = (current + 1).min(n - 1);
+            sel.select_item(next, true);
+        }
+    });
+    window.add_action(&sel_next);
+
+    let gat6 = get_active_tab.clone();
+    let sel_prev = gio::SimpleAction::new("select-prev", None);
+    sel_prev.connect_activate(move |_, _| {
+        if let Some(tab) = gat6() {
+            let sel = &tab.selection_model;
+            let n = sel.n_items();
+            if n == 0 { return; }
+            let mut current = 0;
+            for i in 0..n { if sel.is_selected(i) { current = i; break; } }
+            let prev = if current > 0 { current - 1 } else { 0 };
+            sel.select_item(prev, true);
+        }
+    });
+    window.add_action(&sel_prev);
+
+    // go-first / go-last
+    let gat7 = get_active_tab.clone();
+    let go_first = gio::SimpleAction::new("go-first", None);
+    go_first.connect_activate(move |_, _| {
+        if let Some(tab) = gat7() {
+            if tab.selection_model.n_items() > 0 { tab.selection_model.select_item(0, true); }
+        }
+    });
+    window.add_action(&go_first);
+
+    let gat8 = get_active_tab.clone();
+    let go_last = gio::SimpleAction::new("go-last", None);
+    go_last.connect_activate(move |_, _| {
+        if let Some(tab) = gat8() {
+            let n = tab.selection_model.n_items();
+            if n > 0 { tab.selection_model.select_item(n - 1, true); }
+        }
+    });
+    window.add_action(&go_last);
+
+    // activate-item (l in vim mode / Enter)
+    let gat9 = get_active_tab.clone();
+    let bc_act = breadcrumb.clone(); let bb_act = header.back_btn.clone(); let fb_act = header.forward_btn.clone(); let tv_act = tab_view.clone();
+    let activate_item = gio::SimpleAction::new("activate-item", None);
+    activate_item.connect_activate(move |_, _| {
+        if let Some(tab) = gat9() {
+            let sel = &tab.selection_model;
+            for i in 0..sel.n_items() {
+                if sel.is_selected(i) {
+                    if let Some(item) = sel.item(i) {
+                        if let Some(entry) = item.downcast_ref::<FileEntry>() {
+                            let path = PathBuf::from(entry.path());
+                            if entry.is_dir() {
+                                tab.nav.borrow_mut().navigate_to(path.clone());
+                                let load = make_load_for_tab(&tab, &bc_act, &bb_act, &fb_act, &tv_act);
+                                (load)(path);
+                            } else {
+                                open_file(&path);
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    });
+    window.add_action(&activate_item);
+
     // --- Shortcuts dialog ---
     let win = window.clone();
     let sk = gio::SimpleAction::new("show-shortcuts", None);
@@ -907,7 +1078,7 @@ fn setup_actions(
     // --- Keyboard shortcuts ---
     let sc = gtk::ShortcutController::new();
     sc.set_scope(gtk::ShortcutScope::Managed);
-    let shortcuts = [
+    let mut shortcuts: Vec<(&str, &str)> = vec![
         ("<Control>c", "win.copy"), ("<Control>x", "win.cut"), ("<Control>v", "win.paste"),
         ("<Control><Shift>c", "win.copy-path"), ("<Control>a", "win.select-all"), ("<Control>i", "win.invert-selection"),
         ("Delete", "win.trash"), ("F2", "win.rename"),
@@ -917,8 +1088,22 @@ fn setup_actions(
         ("<Alt>Return", "win.properties"), ("<Control><Alt>t", "win.open-terminal"), ("<Control>comma", "win.preferences"),
         ("<Control>d", "win.add-bookmark"),
         ("<Control>t", "win.new-tab"), ("<Control>w", "win.close-tab"),
+        // Phase 2
+        ("F4", "win.toggle-terminal"),
+        ("F3", "win.toggle-dual-pane"),
+        ("F5", "win.toggle-miller"),
+        ("Return", "win.activate-item"),
     ];
-    for (key, action) in shortcuts {
+
+    // Add vim keybindings if enabled
+    let kb_config = KeybindingConfig::load();
+    if kb_config.vim_mode {
+        for (key, action) in KeybindingConfig::vim_shortcuts() {
+            shortcuts.push((key, action));
+        }
+    }
+
+    for (key, action) in &shortcuts {
         sc.add_shortcut(gtk::Shortcut::new(gtk::ShortcutTrigger::parse_string(key), Some(gtk::NamedAction::new(action))));
     }
     window.add_controller(sc);

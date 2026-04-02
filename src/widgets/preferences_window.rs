@@ -143,6 +143,25 @@ pub fn show_preferences(parent: &impl IsA<gtk::Window>, settings: Rc<RefCell<Set
 
     page.add(&sort_group);
 
+    // --- Keybindings group ---
+    let kb_group = adw::PreferencesGroup::builder()
+        .title("Keybindings")
+        .build();
+
+    let vim_row = adw::SwitchRow::builder()
+        .title("Vim-style Keybindings")
+        .subtitle("Use h/j/k/l for navigation, d/y/p for file ops (requires restart)")
+        .active(crate::state::keybindings::KeybindingConfig::load().vim_mode)
+        .build();
+    vim_row.connect_active_notify(move |row| {
+        let mut kb = crate::state::keybindings::KeybindingConfig::load();
+        kb.vim_mode = row.is_active();
+        kb.save();
+    });
+    kb_group.add(&vim_row);
+
+    page.add(&kb_group);
+
     window.add(&page);
     window.present();
 }
