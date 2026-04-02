@@ -5,9 +5,8 @@ use std::rc::Rc;
 
 use crate::models::file_entry::FileEntry;
 use crate::models::file_list_model::FileListModel;
-use crate::operations::{monitor::DirectoryMonitor, read_dir};
+use crate::operations::monitor::DirectoryMonitor;
 use crate::state::navigation::NavigationState;
-use crate::utils::runtime;
 use crate::widgets::content_view::ContentView;
 use crate::widgets::status_bar::StatusBar;
 

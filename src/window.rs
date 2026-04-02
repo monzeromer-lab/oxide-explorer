@@ -363,7 +363,7 @@ impl OxideWindow {
         let back_btn_switch = header.back_btn.clone();
         let fwd_btn_switch = header.forward_btn.clone();
         let tabs_switch = tabs.clone();
-        let tab_view_switch = tab_view.clone();
+        let _tab_view_switch = tab_view.clone();
         tab_view.connect_selected_page_notify(move |tv| {
             if let Some(page) = tv.selected_page() {
                 let child = page.child();

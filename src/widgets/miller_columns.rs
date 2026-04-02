@@ -1,5 +1,5 @@
 use adw::prelude::*;
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
