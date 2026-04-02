@@ -11,13 +11,13 @@ pub struct HeaderBar {
     pub search_btn: gtk::ToggleButton,
     pub zoom_in_btn: gtk::Button,
     pub zoom_out_btn: gtk::Button,
-    pub _menu_button: gtk::MenuButton,
 }
 
 impl HeaderBar {
     pub fn new() -> Self {
         let widget = adw::HeaderBar::new();
-        widget.set_show_title(false);
+        // Keep show_title true so the title widget (breadcrumb) is visible
+        widget.set_centering_policy(adw::CenteringPolicy::Loose);
 
         // Navigation buttons
         let back_btn = gtk::Button::from_icon_name("go-previous-symbolic");
@@ -113,7 +113,6 @@ impl HeaderBar {
             search_btn,
             zoom_in_btn,
             zoom_out_btn,
-            _menu_button: menu_button,
         }
     }
 }

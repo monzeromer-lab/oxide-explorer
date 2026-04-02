@@ -103,8 +103,9 @@ impl BreadcrumbBar {
                 Component::Normal(name) => {
                     accumulated.push(name);
 
-                    // Separator
-                    let sep = gtk::Label::new(Some("/"));
+                    // Separator arrow
+                    let sep = gtk::Image::from_icon_name("go-next-symbolic");
+                    sep.set_pixel_size(12);
                     sep.add_css_class("dim-label");
                     self.buttons_box.append(&sep);
 

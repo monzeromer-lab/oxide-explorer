@@ -15,38 +15,42 @@ pub struct TerminalPanel {
 impl TerminalPanel {
     pub fn new() -> Self {
         let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        container.set_height_request(200);
 
-        let header = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+        // Minimal header: just a separator line with close button
+        let sep = gtk::Separator::new(gtk::Orientation::Horizontal);
+        container.append(&sep);
+
+        let header = gtk::CenterBox::new();
         header.set_margin_start(8);
         header.set_margin_end(4);
-        header.set_margin_top(2);
-        header.set_margin_bottom(2);
-        header.add_css_class("terminal-header");
 
-        let label = gtk::Label::new(Some("Terminal"));
-        label.add_css_class("heading");
-        label.set_halign(gtk::Align::Start);
-        label.set_hexpand(true);
-        header.append(&label);
+        let shell_name = std::env::var("SHELL")
+            .ok()
+            .and_then(|s| s.rsplit('/').next().map(String::from))
+            .unwrap_or_else(|| "bash".into());
+        let label = gtk::Label::new(Some(&shell_name));
+        label.add_css_class("dim-label");
+        header.set_start_widget(Some(&label));
 
         let close_btn = gtk::Button::from_icon_name("window-close-symbolic");
         close_btn.add_css_class("flat");
+        close_btn.add_css_class("circular");
         close_btn.set_tooltip_text(Some("Hide Terminal (F4)"));
-        header.append(&close_btn);
+        header.set_end_widget(Some(&close_btn));
 
-        let sep = gtk::Separator::new(gtk::Orientation::Horizontal);
-        container.append(&sep);
         container.append(&header);
 
         #[cfg(feature = "terminal")]
         let terminal = {
             let term = vte4::Terminal::new();
-            term.set_size_request(-1, 250);
+            term.set_vexpand(true);
             term.set_scroll_on_output(true);
             term.set_scrollback_lines(10000);
 
             let scrolled = gtk::ScrolledWindow::new();
             scrolled.set_child(Some(&term));
+            scrolled.set_vexpand(true);
             scrolled.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
             container.append(&scrolled);
             term
@@ -61,7 +65,6 @@ impl TerminalPanel {
                 "Build with --features terminal\n(requires libvte-2.91-gtk4-dev)",
             ));
             placeholder.set_vexpand(true);
-            placeholder.set_height_request(200);
             container.append(&placeholder);
         }
 
@@ -75,7 +78,6 @@ impl TerminalPanel {
         }
     }
 
-    /// Spawn the shell at the given directory. Only spawns once; subsequent calls use cd.
     pub fn spawn_at(&self, cwd: &Path) {
         #[cfg(feature = "terminal")]
         {
