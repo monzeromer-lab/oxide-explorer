@@ -23,6 +23,7 @@ pub struct TabState {
     pub monitor: Rc<RefCell<Option<DirectoryMonitor>>>,
     /// The container widget that holds filter_bar + content + status_bar
     pub container: gtk::Box,
+    #[allow(dead_code)]
     pub filter_text: Rc<RefCell<String>>,
 }
 
@@ -113,14 +114,6 @@ impl TabState {
         self.nav.borrow().current.clone()
     }
 
-    pub fn title(&self) -> String {
-        self.nav
-            .borrow()
-            .current
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "/".to_string())
-    }
 }
 
 use gtk::prelude::*;

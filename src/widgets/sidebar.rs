@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 pub struct Sidebar {
     pub widget: gtk::ScrolledWindow,
-    pub list_box: gtk::ListBox,
+    pub _list_box: gtk::ListBox,
     bookmarks: Rc<RefCell<Vec<PathBuf>>>,
     bookmarks_group: gtk::Box,
     on_navigate: Rc<dyn Fn(PathBuf)>,
@@ -156,7 +156,7 @@ impl Sidebar {
 
         Self {
             widget: scrolled,
-            list_box,
+            _list_box: list_box,
             bookmarks,
             bookmarks_group,
             on_navigate,
@@ -187,6 +187,7 @@ impl Sidebar {
         self.bookmarks_group.append(&row_btn);
     }
 
+    #[allow(dead_code)]
     pub fn remove_bookmark(&self, path: &PathBuf) {
         let mut bm = self.bookmarks.borrow_mut();
         bm.retain(|p| p != path);

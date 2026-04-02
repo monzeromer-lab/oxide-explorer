@@ -12,11 +12,11 @@ use crate::widgets::status_bar::StatusBar;
 
 /// One side of the dual-pane view
 pub struct PaneState {
-    pub nav: Rc<RefCell<NavigationState>>,
+    pub _nav: Rc<RefCell<NavigationState>>,
     pub file_model: FileListModel,
     pub filter: gtk::CustomFilter,
     pub filter_model: gtk::FilterListModel,
-    pub selection_model: gtk::MultiSelection,
+    pub _selection_model: gtk::MultiSelection,
     pub content: Rc<ContentView>,
     pub status_bar: Rc<StatusBar>,
     pub monitor: Rc<RefCell<Option<DirectoryMonitor>>>,
@@ -59,11 +59,7 @@ impl PaneState {
         container.set_hexpand(true);
         container.set_vexpand(true);
 
-        Self { nav, file_model, filter, filter_model, selection_model, content, status_bar, monitor, container, path_label }
-    }
-
-    pub fn current_path(&self) -> PathBuf {
-        self.nav.borrow().current.clone()
+        Self { _nav: nav, file_model, filter, filter_model, _selection_model: selection_model, content, status_bar, monitor, container, path_label }
     }
 
     pub fn load_directory(&self, path: PathBuf) {
@@ -85,6 +81,7 @@ pub struct DualPane {
     pub paned: gtk::Paned,
     pub left: Rc<PaneState>,
     pub right: Rc<PaneState>,
+    #[allow(dead_code)]
     pub active_side: Rc<Cell<Side>>,
 }
 
@@ -123,6 +120,7 @@ impl DualPane {
         Self { paned, left, right, active_side }
     }
 
+    #[allow(dead_code)]
     pub fn active_pane(&self) -> &Rc<PaneState> {
         match self.active_side.get() {
             Side::Left => &self.left,
@@ -130,6 +128,7 @@ impl DualPane {
         }
     }
 
+    #[allow(dead_code)]
     pub fn inactive_pane(&self) -> &Rc<PaneState> {
         match self.active_side.get() {
             Side::Left => &self.right,

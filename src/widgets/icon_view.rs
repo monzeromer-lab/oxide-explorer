@@ -7,7 +7,6 @@ use crate::models::file_entry::FileEntry;
 pub struct IconView {
     pub widget: gtk::ScrolledWindow,
     pub grid_view: gtk::GridView,
-    pub icon_size: Rc<Cell<i32>>,
 }
 
 impl IconView {
@@ -78,13 +77,6 @@ impl IconView {
         Self {
             widget: scrolled,
             grid_view,
-            icon_size,
         }
-    }
-
-    pub fn refresh_icons(&self) {
-        // Force re-bind by re-setting the factory isn't great,
-        // but we can trigger items_changed on the model if needed.
-        // For now, changing icon size takes effect on next directory load.
     }
 }

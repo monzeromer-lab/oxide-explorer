@@ -128,8 +128,4 @@ impl BreadcrumbBar {
         self.path_entry.select_region(0, -1);
     }
 
-    pub fn exit_edit_mode(&self) {
-        *self.editing.borrow_mut() = false;
-        self.widget.set_visible_child_name("breadcrumb");
-    }
 }

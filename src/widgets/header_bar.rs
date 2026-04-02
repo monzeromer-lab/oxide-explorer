@@ -11,7 +11,7 @@ pub struct HeaderBar {
     pub search_btn: gtk::ToggleButton,
     pub zoom_in_btn: gtk::Button,
     pub zoom_out_btn: gtk::Button,
-    pub menu_button: gtk::MenuButton,
+    pub _menu_button: gtk::MenuButton,
 }
 
 impl HeaderBar {
@@ -113,7 +113,7 @@ impl HeaderBar {
             search_btn,
             zoom_in_btn,
             zoom_out_btn,
-            menu_button,
+            _menu_button: menu_button,
         }
     }
 }

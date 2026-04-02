@@ -82,6 +82,7 @@ impl TerminalPanel {
         }
     }
 
+    #[allow(dead_code)]
     pub fn focus(&self) {
         #[cfg(feature = "terminal")]
         self.terminal.grab_focus();

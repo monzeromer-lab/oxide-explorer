@@ -88,7 +88,4 @@ impl FilterBar {
         self.widget.reveals_child()
     }
 
-    pub fn filter_text(&self) -> String {
-        self.filter_text.borrow().clone()
-    }
 }

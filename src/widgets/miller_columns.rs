@@ -11,7 +11,7 @@ use crate::utils::runtime;
 /// A single column in the Miller columns view
 struct MillerColumn {
     widget: gtk::ScrolledWindow,
-    list_view: gtk::ListView,
+    _list_view: gtk::ListView,
     model: FileListModel,
     selection: gtk::SingleSelection,
     path: PathBuf,
@@ -70,7 +70,7 @@ impl MillerColumn {
         scrolled.set_width_request(250);
         scrolled.set_vexpand(true);
 
-        Self { widget: scrolled, list_view, model, selection, path }
+        Self { widget: scrolled, _list_view: list_view, model, selection, path }
     }
 
     fn load(&self) {
