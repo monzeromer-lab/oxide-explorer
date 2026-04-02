@@ -352,17 +352,18 @@ impl OxideWindow {
         panels_stack.set_hhomogeneous(false);
         panels_stack.set_vhomogeneous(false);
         let empty_panel = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        empty_panel.set_height_request(0);
         panels_stack.add_named(&empty_panel, Some("none"));
         panels_stack.add_named(&dual_pane.paned, Some("dual-pane"));
         panels_stack.add_named(&miller.widget, Some("miller"));
         panels_stack.add_named(&terminal.widget, Some("terminal"));
         panels_stack.set_visible_child_name("none");
+        panels_stack.set_visible(false); // Hidden entirely when no panel active
 
         // Wire close buttons to hide panels
         let ps_close = panels_stack.clone();
         terminal.close_btn.connect_clicked(move |_| {
             ps_close.set_visible_child_name("none");
+            ps_close.set_visible(false);
         });
 
         let content_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -894,7 +895,9 @@ fn setup_actions(
         let current = ps.visible_child_name();
         if current.as_deref() == Some("terminal") {
             ps.set_visible_child_name("none");
+            ps.set_visible(false);
         } else {
+            ps.set_visible(true);
             ps.set_visible_child_name("terminal");
             if let Some(tab) = gat2() {
                 term.spawn_at(&tab.current_path());
@@ -913,7 +916,9 @@ fn setup_actions(
         let current = ps.visible_child_name();
         if current.as_deref() == Some("dual-pane") {
             ps.set_visible_child_name("none");
+            ps.set_visible(false);
         } else {
+            ps.set_visible(true);
             ps.set_visible_child_name("dual-pane");
             if let Some(tab) = gat3() {
                 let path = tab.current_path();
@@ -933,7 +938,9 @@ fn setup_actions(
         let current = ps.visible_child_name();
         if current.as_deref() == Some("miller") {
             ps.set_visible_child_name("none");
+            ps.set_visible(false);
         } else {
+            ps.set_visible(true);
             ps.set_visible_child_name("miller");
             if let Some(tab) = gat4() {
                 ml.navigate_to(tab.current_path());

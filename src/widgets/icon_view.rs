@@ -28,7 +28,8 @@ impl IconView {
 
             let label = gtk::Label::new(None);
             label.set_ellipsize(gtk::pango::EllipsizeMode::End);
-            label.set_max_width_chars(12);
+            label.set_width_chars(1);    // minimum allocation
+            label.set_max_width_chars(14); // ellipsize after this
             label.set_lines(2);
             label.set_wrap(true);
             label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
