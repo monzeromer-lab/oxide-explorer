@@ -73,78 +73,6 @@ impl OxideWindow {
         };
 
         // --- Create a load_directory for a specific tab ---
-        fn make_load_for_tab(
-            tab: &Rc<TabState>,
-            breadcrumb: &Rc<BreadcrumbBar>,
-            back_btn: &gtk::Button,
-            fwd_btn: &gtk::Button,
-            tab_view: &adw::TabView,
-        ) -> Rc<dyn Fn(PathBuf)> {
-            let tab = tab.clone();
-            let breadcrumb = breadcrumb.clone();
-            let back_btn = back_btn.clone();
-            let fwd_btn = fwd_btn.clone();
-            let tab_view = tab_view.clone();
-
-            Rc::new(move |path: PathBuf| {
-                let tab = tab.clone();
-                let breadcrumb = breadcrumb.clone();
-                let back_btn = back_btn.clone();
-                let fwd_btn = fwd_btn.clone();
-                let tab_view = tab_view.clone();
-
-                tab.content.show_loading();
-
-                // Update breadcrumb
-                breadcrumb.set_path(&path, {
-                    let tab = tab.clone();
-                    let back_btn = back_btn.clone();
-                    let fwd_btn = fwd_btn.clone();
-                    move |target| {
-                        {
-                            let mut n = tab.nav.borrow_mut();
-                            n.navigate_to(target.clone());
-                            back_btn.set_sensitive(n.can_go_back());
-                            fwd_btn.set_sensitive(n.can_go_forward());
-                        }
-                        tab.content.show_loading();
-                        load_path_async(
-                            target,
-                            tab.file_model.clone(),
-                            tab.status_bar.clone(),
-                            tab.monitor.clone(),
-                            tab.content.clone(),
-                            tab.filter.clone(),
-                            tab.filter_model.clone(),
-                        );
-                    }
-                });
-
-                {
-                    let n = tab.nav.borrow();
-                    back_btn.set_sensitive(n.can_go_back());
-                    fwd_btn.set_sensitive(n.can_go_forward());
-                }
-
-                // Update tab title
-                let title = path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "/".to_string());
-                tab_view.page(&tab.container).set_title(&title);
-
-                load_path_async(
-                    path,
-                    tab.file_model.clone(),
-                    tab.status_bar.clone(),
-                    tab.monitor.clone(),
-                    tab.content.clone(),
-                    tab.filter.clone(),
-                    tab.filter_model.clone(),
-                );
-            })
-        }
-
         // --- Create new tab function ---
         let create_tab: CreateTabFn = {
             let tabs = tabs.clone();
@@ -969,7 +897,7 @@ fn setup_actions(
         } else {
             ps.set_visible_child_name("terminal");
             if let Some(tab) = gat2() {
-                term.cd(&tab.current_path());
+                term.spawn_at(&tab.current_path());
             }
             term.focus();
         }
@@ -1230,7 +1158,22 @@ fn setup_actions(
         }
     }
 
+    // Apply custom keybinding overrides from config
+    // Overrides replace the default key for a given action
+    let custom_shortcuts: Vec<(String, String)> = kb_config.custom_bindings.iter()
+        .map(|(action, key)| (key.clone(), format!("win.{action}")))
+        .collect();
+
     for (key, action) in &shortcuts {
+        // Skip if this action has a custom override
+        let full_action = *action;
+        let has_override = custom_shortcuts.iter().any(|(_, a)| a == full_action);
+        if !has_override {
+            sc.add_shortcut(gtk::Shortcut::new(gtk::ShortcutTrigger::parse_string(key), Some(gtk::NamedAction::new(action))));
+        }
+    }
+    // Add the custom overrides
+    for (key, action) in &custom_shortcuts {
         sc.add_shortcut(gtk::Shortcut::new(gtk::ShortcutTrigger::parse_string(key), Some(gtk::NamedAction::new(action))));
     }
     window.add_controller(sc);
@@ -1264,13 +1207,34 @@ fn make_load_for_tab(
     fwd_btn: &gtk::Button,
     tab_view: &adw::TabView,
 ) -> Rc<dyn Fn(PathBuf)> {
+    make_load_for_tab_with_terminal(tab, breadcrumb, back_btn, fwd_btn, tab_view, None, None)
+}
+
+fn make_load_for_tab_with_terminal(
+    tab: &Rc<TabState>,
+    breadcrumb: &Rc<BreadcrumbBar>,
+    back_btn: &gtk::Button,
+    fwd_btn: &gtk::Button,
+    tab_view: &adw::TabView,
+    terminal: Option<&Rc<TerminalPanel>>,
+    panels_stack: Option<&gtk::Stack>,
+) -> Rc<dyn Fn(PathBuf)> {
     let tab = tab.clone(); let breadcrumb = breadcrumb.clone();
     let back_btn = back_btn.clone(); let fwd_btn = fwd_btn.clone(); let tab_view = tab_view.clone();
+    let terminal = terminal.cloned();
+    let panels_stack = panels_stack.cloned();
 
     Rc::new(move |path: PathBuf| {
         tab.content.show_loading();
         let tab = tab.clone(); let breadcrumb = breadcrumb.clone();
         let back_btn = back_btn.clone(); let fwd_btn = fwd_btn.clone(); let tab_view = tab_view.clone();
+
+        // Sync terminal CWD if terminal panel is visible
+        if let (Some(term), Some(ps)) = (&terminal, &panels_stack) {
+            if ps.visible_child_name().as_deref() == Some("terminal") {
+                term.cd(&path);
+            }
+        }
 
         breadcrumb.set_path(&path, {
             let tab = tab.clone(); let back_btn = back_btn.clone(); let fwd_btn = fwd_btn.clone();

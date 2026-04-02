@@ -1,6 +1,6 @@
 /* Oxide Explorer - Custom Styles */
 
-/* Sidebar polish */
+/* === Sidebar === */
 .navigation-sidebar {
     background: none;
 }
@@ -9,6 +9,7 @@
     border-radius: 6px;
     margin: 1px 4px;
     padding: 2px 0;
+    min-height: 32px;
 }
 
 .navigation-sidebar row:selected {
@@ -19,7 +20,7 @@
     background-color: alpha(@window_fg_color, 0.07);
 }
 
-/* Breadcrumb buttons */
+/* === Breadcrumb === */
 .breadcrumb-btn {
     padding: 4px 8px;
     min-height: 24px;
@@ -30,23 +31,26 @@
     background-color: alpha(@window_fg_color, 0.08);
 }
 
-/* Content view items */
+/* === Icon Grid View === */
 gridview > child {
     border-radius: 8px;
     padding: 4px;
+    transition: background-color 150ms ease;
 }
 
 gridview > child:selected {
     background-color: alpha(@accent_bg_color, 0.2);
-    border-radius: 8px;
 }
 
 gridview > child:hover:not(:selected) {
     background-color: alpha(@window_fg_color, 0.05);
-    border-radius: 8px;
 }
 
-/* Details view row hover */
+/* === Details (Column) View === */
+columnview > listview > row {
+    transition: background-color 100ms ease;
+}
+
 columnview > listview > row:hover:not(:selected) {
     background-color: alpha(@window_fg_color, 0.04);
 }
@@ -55,49 +59,74 @@ columnview > listview > row:selected {
     background-color: alpha(@accent_bg_color, 0.2);
 }
 
-/* Status bar styling */
+/* === Status bar === */
 .status-bar {
-    border-top: 1px solid alpha(@window_fg_color, 0.12);
+    border-top: 1px solid alpha(@window_fg_color, 0.1);
     padding: 4px 8px;
+    min-height: 24px;
 }
 
-/* Filter bar */
+/* === Filter bar === */
 .filter-bar {
-    border-bottom: 1px solid alpha(@window_fg_color, 0.12);
-    background-color: alpha(@window_fg_color, 0.03);
+    border-bottom: 1px solid alpha(@window_fg_color, 0.1);
+    background-color: alpha(@window_fg_color, 0.02);
+    padding: 4px;
 }
 
-/* Drop target highlight */
+/* === Drop target === */
 .drop-target {
     background-color: alpha(@accent_bg_color, 0.15);
     border: 2px dashed @accent_bg_color;
     border-radius: 8px;
 }
 
-/* Symlink label */
+/* === Symlink indicator === */
 .symlink-label {
     font-size: 0.75em;
     color: alpha(@window_fg_color, 0.5);
 }
 
-/* Properties dialog */
+/* === Properties dialog === */
 .properties-group {
     margin: 8px;
 }
 
-/* Dual pane active indicator */
+/* === Dual Pane === */
 .pane-active {
-    border-top: 2px solid @accent_bg_color;
+    border-top: 3px solid @accent_bg_color;
 }
 
-/* Miller column item */
-.miller-column listview > row:selected {
-    background-color: alpha(@accent_bg_color, 0.2);
+.pane-active > label:first-child {
+    font-weight: bold;
 }
 
-/* Terminal header */
+/* === Miller Columns === */
+listview > row {
+    min-height: 28px;
+}
+
+/* === Terminal === */
 .terminal-header {
-    border-top: 1px solid alpha(@window_fg_color, 0.12);
-    padding: 2px 4px;
+    border-top: 1px solid alpha(@window_fg_color, 0.15);
+    padding: 4px 8px;
     background-color: alpha(@window_fg_color, 0.03);
+    min-height: 28px;
+}
+
+/* === Tab bar polish === */
+tabbar tab {
+    transition: background-color 150ms ease;
+}
+
+tabbar tab:checked {
+    background-color: alpha(@accent_bg_color, 0.08);
+}
+
+/* === Heading labels in sidebar === */
+.heading {
+    font-weight: bold;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.7;
 }

@@ -146,6 +146,7 @@ pub fn show_preferences(parent: &impl IsA<gtk::Window>, settings: Rc<RefCell<Set
     // --- Keybindings group ---
     let kb_group = adw::PreferencesGroup::builder()
         .title("Keybindings")
+        .description("Toggle Vim-style navigation or customize individual shortcuts")
         .build();
 
     let vim_row = adw::SwitchRow::builder()
@@ -160,7 +161,53 @@ pub fn show_preferences(parent: &impl IsA<gtk::Window>, settings: Rc<RefCell<Set
     });
     kb_group.add(&vim_row);
 
+    // Custom keybinding overrides
+    let custom_kb_group = adw::PreferencesGroup::builder()
+        .title("Custom Shortcut Overrides")
+        .description("Override default shortcuts. Format: GTK accelerator string (e.g. \"<Control>n\"). Changes require restart.")
+        .build();
+
+    let kb_config = crate::state::keybindings::KeybindingConfig::load();
+    let overridable = [
+        ("copy", "Copy", "<Control>c"),
+        ("cut", "Cut", "<Control>x"),
+        ("paste", "Paste", "<Control>v"),
+        ("trash", "Move to Trash", "Delete"),
+        ("rename", "Rename", "F2"),
+        ("toggle-hidden", "Toggle Hidden Files", "<Control>h"),
+        ("toggle-filter", "Filter", "<Control>f"),
+        ("new-tab", "New Tab", "<Control>t"),
+        ("close-tab", "Close Tab", "<Control>w"),
+        ("toggle-terminal", "Toggle Terminal", "F4"),
+        ("toggle-dual-pane", "Dual Pane", "F3"),
+        ("toggle-miller", "Miller Columns", "F5"),
+    ];
+
+    for (action, label, default) in overridable {
+        let current = kb_config.custom_bindings
+            .get(action)
+            .cloned()
+            .unwrap_or_else(|| default.to_string());
+
+        let row = adw::EntryRow::builder()
+            .title(label)
+            .text(&current)
+            .build();
+
+        let action_name = action.to_string();
+        row.connect_changed(move |entry| {
+            let text = entry.text().to_string();
+            if !text.is_empty() {
+                let mut kb = crate::state::keybindings::KeybindingConfig::load();
+                kb.custom_bindings.insert(action_name.clone(), text);
+                kb.save();
+            }
+        });
+        custom_kb_group.add(&row);
+    }
+
     page.add(&kb_group);
+    page.add(&custom_kb_group);
 
     window.add(&page);
     window.present();

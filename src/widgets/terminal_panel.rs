@@ -8,6 +8,8 @@ pub struct TerminalPanel {
     pub close_btn: gtk::Button,
     #[cfg(feature = "terminal")]
     terminal: vte4::Terminal,
+    #[cfg(feature = "terminal")]
+    spawned: std::cell::Cell<bool>,
 }
 
 impl TerminalPanel {
@@ -43,19 +45,6 @@ impl TerminalPanel {
             term.set_scroll_on_output(true);
             term.set_scrollback_lines(10000);
 
-            let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
-            term.spawn_async(
-                vte4::PtyFlags::DEFAULT,
-                None,
-                &[&shell],
-                &[],
-                glib::SpawnFlags::DEFAULT,
-                || {},
-                -1,
-                gio::Cancellable::NONE,
-                |_result| {},
-            );
-
             let scrolled = gtk::ScrolledWindow::new();
             scrolled.set_child(Some(&term));
             scrolled.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
@@ -68,7 +57,9 @@ impl TerminalPanel {
             let placeholder = adw::StatusPage::new();
             placeholder.set_icon_name(Some("utilities-terminal-symbolic"));
             placeholder.set_title("Terminal Not Available");
-            placeholder.set_description(Some("Build with --features terminal\n(requires libvte-2.91-gtk4-dev)"));
+            placeholder.set_description(Some(
+                "Build with --features terminal\n(requires libvte-2.91-gtk4-dev)",
+            ));
             placeholder.set_vexpand(true);
             placeholder.set_height_request(200);
             container.append(&placeholder);
@@ -79,6 +70,33 @@ impl TerminalPanel {
             close_btn,
             #[cfg(feature = "terminal")]
             terminal,
+            #[cfg(feature = "terminal")]
+            spawned: std::cell::Cell::new(false),
+        }
+    }
+
+    /// Spawn the shell at the given directory. Only spawns once; subsequent calls use cd.
+    pub fn spawn_at(&self, cwd: &Path) {
+        #[cfg(feature = "terminal")]
+        {
+            if self.spawned.get() {
+                self.cd(cwd);
+                return;
+            }
+            let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+            let cwd_str = cwd.to_string_lossy().to_string();
+            self.terminal.spawn_async(
+                vte4::PtyFlags::DEFAULT,
+                Some(&cwd_str),
+                &[&shell],
+                &[],
+                glib::SpawnFlags::DEFAULT,
+                || {},
+                -1,
+                gio::Cancellable::NONE,
+                |_result| {},
+            );
+            self.spawned.set(true);
         }
     }
 
@@ -90,7 +108,11 @@ impl TerminalPanel {
     pub fn cd(&self, path: &Path) {
         #[cfg(feature = "terminal")]
         {
-            let cmd = format!("cd {}\n", shell_escape(path));
+            if !self.spawned.get() {
+                self.spawn_at(path);
+                return;
+            }
+            let cmd = format!("cd {} && clear\n", shell_escape(path));
             self.terminal.feed_child(cmd.as_bytes());
         }
     }
