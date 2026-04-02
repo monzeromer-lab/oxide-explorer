@@ -20,6 +20,7 @@ use crate::widgets::miller_columns::MillerColumnsView;
 use crate::widgets::sidebar::Sidebar;
 use crate::widgets::status_bar::StatusBar;
 use crate::widgets::terminal_panel::TerminalPanel;
+use crate::widgets::preview_pane::PreviewPane;
 use crate::plugins::engine::PluginEngine;
 
 pub struct OxideWindow {
@@ -372,15 +373,24 @@ impl OxideWindow {
             ps_close.set_visible(false);
         });
 
+        // Preview pane (Phase 3)
+        let preview_pane = Rc::new(PreviewPane::new());
+
+        // Content area: tabs + panels vertically, preview pane to the right
         let content_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
         tab_view.set_vexpand(true);
         content_box.append(&tab_view);
         content_box.append(&panels_stack);
 
+        let content_with_preview = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        content_box.set_hexpand(true);
+        content_with_preview.append(&content_box);
+        content_with_preview.append(&preview_pane.widget);
+
         let paned = gtk::Paned::new(gtk::Orientation::Horizontal);
         paned.set_position(200);
         paned.set_start_child(Some(&sidebar.widget));
-        paned.set_end_child(Some(&content_box));
+        paned.set_end_child(Some(&content_with_preview));
         paned.set_shrink_start_child(false);
         paned.set_resize_start_child(false);
 
@@ -413,6 +423,7 @@ impl OxideWindow {
             &miller,
             &panels_stack,
             &plugin_engine,
+            &preview_pane,
         );
 
         // --- Create initial tab ---
@@ -554,6 +565,15 @@ fn build_context_menu(plugin_actions: &[crate::plugins::api::PluginAction]) -> g
     tab_section.append(Some("Bookmark This Folder"), Some("win.add-bookmark"));
     menu.append_section(None, &tab_section);
 
+    // Phase 3 tools
+    let tools_section = gio::Menu::new();
+    tools_section.append(Some("Search..."), Some("win.search"));
+    tools_section.append(Some("Batch Rename..."), Some("win.batch-rename"));
+    tools_section.append(Some("Extract Archive"), Some("win.extract-archive"));
+    tools_section.append(Some("Compress..."), Some("win.compress"));
+    tools_section.append(Some("Tags & Colors..."), Some("win.edit-tags"));
+    menu.append_section(None, &tools_section);
+
     let delete_section = gio::Menu::new();
     delete_section.append(Some("Move to Trash"), Some("win.trash"));
     menu.append_section(None, &delete_section);
@@ -600,6 +620,7 @@ fn setup_actions(
     miller: &Rc<MillerColumnsView>,
     panels_stack: &gtk::Stack,
     plugin_engine: &Rc<RefCell<PluginEngine>>,
+    preview_pane: &Rc<PreviewPane>,
 ) {
     // Helper macro to reduce boilerplate
     macro_rules! active_sel {
@@ -1129,6 +1150,119 @@ fn setup_actions(
     });
     window.add_action(&activate_item);
 
+    // === Phase 3 Actions ===
+
+    // --- Search (Ctrl+Shift+F) ---
+    let gat_search = get_active_tab.clone();
+    let ct_search = create_tab.clone();
+    let win = window.clone();
+    let search_action = gio::SimpleAction::new("search", None);
+    search_action.connect_activate(move |_, _| {
+        let dir = gat_search().map(|t| t.current_path()).unwrap_or_else(glib::home_dir);
+        let ct = ct_search.clone();
+        crate::widgets::search_dialog::show_search_dialog(&win, &dir, move |path| {
+            ct(path);
+        });
+    });
+    window.add_action(&search_action);
+
+    // --- Batch Rename ---
+    let gat_rename = get_active_tab.clone();
+    let win = window.clone();
+    let bc_rename = breadcrumb.clone();
+    let bb_rename = header.back_btn.clone();
+    let fb_rename = header.forward_btn.clone();
+    let tv_rename = tab_view.clone();
+    let batch_rename_action = gio::SimpleAction::new("batch-rename", None);
+    batch_rename_action.connect_activate(move |_, _| {
+        if let Some(tab) = gat_rename() {
+            let paths = get_selected_paths(&tab.selection_model);
+            if paths.len() < 2 { return; }
+            let load = make_load_for_tab(&tab, &bc_rename, &bb_rename, &fb_rename, &tv_rename);
+            let dir = tab.current_path();
+            crate::widgets::batch_rename::show_batch_rename(&win, paths, move || {
+                (load)(dir.clone());
+            });
+        }
+    });
+    window.add_action(&batch_rename_action);
+
+    // --- Preview Pane toggle (Space) ---
+    let pp = preview_pane.clone();
+    let gat_preview = get_active_tab.clone();
+    let toggle_preview = gio::SimpleAction::new("toggle-preview", None);
+    toggle_preview.connect_activate(move |_, _| {
+        pp.toggle();
+        if pp.is_visible() {
+            if let Some(tab) = gat_preview() {
+                let paths = get_selected_paths(&tab.selection_model);
+                if let Some(first) = paths.first() {
+                    pp.preview_file(first);
+                }
+            }
+        }
+    });
+    window.add_action(&toggle_preview);
+
+    // --- Extract Archive ---
+    let gat_extract = get_active_tab.clone();
+    let win = window.clone();
+    let bc_ext = breadcrumb.clone();
+    let bb_ext = header.back_btn.clone();
+    let fb_ext = header.forward_btn.clone();
+    let tv_ext = tab_view.clone();
+    let extract_action = gio::SimpleAction::new("extract-archive", None);
+    extract_action.connect_activate(move |_, _| {
+        if let Some(tab) = gat_extract() {
+            let paths = get_selected_paths(&tab.selection_model);
+            if let Some(archive) = paths.first() {
+                if crate::widgets::archive_ops::is_archive(archive) {
+                    let load = make_load_for_tab(&tab, &bc_ext, &bb_ext, &fb_ext, &tv_ext);
+                    crate::widgets::archive_ops::show_extract_dialog(&win, archive, move |dest| {
+                        (load)(dest);
+                    });
+                }
+            }
+        }
+    });
+    window.add_action(&extract_action);
+
+    // --- Compress files ---
+    let gat_compress = get_active_tab.clone();
+    let win = window.clone();
+    let bc_cmp = breadcrumb.clone();
+    let bb_cmp = header.back_btn.clone();
+    let fb_cmp = header.forward_btn.clone();
+    let tv_cmp = tab_view.clone();
+    let compress_action = gio::SimpleAction::new("compress", None);
+    compress_action.connect_activate(move |_, _| {
+        if let Some(tab) = gat_compress() {
+            let paths = get_selected_paths(&tab.selection_model);
+            if !paths.is_empty() {
+                let load = make_load_for_tab(&tab, &bc_cmp, &bb_cmp, &fb_cmp, &tv_cmp);
+                let dir = tab.current_path();
+                crate::widgets::archive_ops::show_compress_dialog(&win, &paths, move |_archive| {
+                    (load)(dir.clone());
+                });
+            }
+        }
+    });
+    window.add_action(&compress_action);
+
+    // --- Tags & Colors ---
+    let gat_tags = get_active_tab.clone();
+    let win = window.clone();
+    let tags_action = gio::SimpleAction::new("edit-tags", None);
+    tags_action.connect_activate(move |_, _| {
+        if let Some(tab) = gat_tags() {
+            let paths = get_selected_paths(&tab.selection_model);
+            if let Some(first) = paths.first() {
+                crate::widgets::file_tags::show_tag_dialog(&win, first);
+            }
+        }
+    });
+    window.add_action(&tags_action);
+
     // --- Connect to Server (Phase 4) ---
     let ct = create_tab.clone();
     let win = window.clone();
@@ -1213,6 +1347,9 @@ fn setup_actions(
         ("Tab", "win.swap-pane"),
         ("F1", "win.show-guide"),
         ("Return", "win.activate-item"),
+        // Phase 3
+        ("<Control><Shift>f", "win.search"),
+        ("space", "win.toggle-preview"),
     ];
 
     // Add vim keybindings if enabled

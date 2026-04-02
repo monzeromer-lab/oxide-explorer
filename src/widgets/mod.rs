@@ -16,3 +16,8 @@ pub mod about_dialog;
 pub mod network_dialog;
 #[allow(dead_code)]
 pub mod cloud_badge;
+pub mod search_dialog;
+pub mod batch_rename;
+pub mod preview_pane;
+pub mod archive_ops;
+pub mod file_tags;

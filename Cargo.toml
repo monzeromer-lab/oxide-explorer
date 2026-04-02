@@ -20,6 +20,9 @@ toml = "0.8"
 dirs = "6"
 vte4 = { version = "0.8", optional = true }
 mlua = { version = "0.10", features = ["lua54", "vendored", "serialize"] }
+regex = "1"
+walkdir = "2"
+xattr = "1"
 
 [features]
 default = ["terminal"]
