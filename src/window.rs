@@ -20,6 +20,7 @@ use crate::widgets::miller_columns::MillerColumnsView;
 use crate::widgets::sidebar::Sidebar;
 use crate::widgets::status_bar::StatusBar;
 use crate::widgets::terminal_panel::TerminalPanel;
+use crate::plugins::engine::PluginEngine;
 
 pub struct OxideWindow {
     pub window: adw::ApplicationWindow,
@@ -72,7 +73,10 @@ impl OxideWindow {
             })
         };
 
-        // --- Create a load_directory for a specific tab ---
+        // --- Plugin engine (needs to be before create_tab) ---
+        let plugin_engine = Rc::new(RefCell::new(PluginEngine::new()));
+        plugin_engine.borrow_mut().load_plugins();
+
         // --- Create new tab function ---
         let create_tab: CreateTabFn = {
             let tabs = tabs.clone();
@@ -82,6 +86,7 @@ impl OxideWindow {
             let breadcrumb = breadcrumb.clone();
             let back_btn = header.back_btn.clone();
             let fwd_btn = header.forward_btn.clone();
+            let pe = plugin_engine.clone();
 
             Rc::new(move |path: PathBuf| -> Rc<TabState> {
                 let tab = Rc::new(TabState::new(
@@ -109,7 +114,8 @@ impl OxideWindow {
                 });
 
                 // Context menu for this tab
-                let context_menu = build_context_menu();
+                let plugin_actions = pe.borrow().get_actions();
+                let context_menu = build_context_menu(&plugin_actions);
                 context_menu.set_parent(&tab.content.outer_stack);
                 let menu_ref = context_menu.clone();
                 let gesture = gtk::GestureClick::new();
@@ -406,6 +412,7 @@ impl OxideWindow {
             &dual_pane,
             &miller,
             &panels_stack,
+            &plugin_engine,
         );
 
         // --- Create initial tab ---
@@ -524,7 +531,7 @@ fn load_path_async(
     *monitor.borrow_mut() = m;
 }
 
-fn build_context_menu() -> gtk::PopoverMenu {
+fn build_context_menu(plugin_actions: &[crate::plugins::api::PluginAction]) -> gtk::PopoverMenu {
     let menu = gio::Menu::new();
 
     let file_section = gio::Menu::new();
@@ -550,6 +557,16 @@ fn build_context_menu() -> gtk::PopoverMenu {
     let delete_section = gio::Menu::new();
     delete_section.append(Some("Move to Trash"), Some("win.trash"));
     menu.append_section(None, &delete_section);
+
+    // Plugin actions
+    if !plugin_actions.is_empty() {
+        let plugin_section = gio::Menu::new();
+        for action in plugin_actions {
+            let action_id = format!("win.plugin-{}", action.name);
+            plugin_section.append(Some(&action.label), Some(&action_id));
+        }
+        menu.append_section(Some("Plugins"), &plugin_section);
+    }
 
     let info_section = gio::Menu::new();
     info_section.append(Some("Properties"), Some("win.properties"));
@@ -582,6 +599,7 @@ fn setup_actions(
     dual_pane: &Rc<DualPane>,
     miller: &Rc<MillerColumnsView>,
     panels_stack: &gtk::Stack,
+    plugin_engine: &Rc<RefCell<PluginEngine>>,
 ) {
     // Helper macro to reduce boilerplate
     macro_rules! active_sel {
@@ -1110,6 +1128,46 @@ fn setup_actions(
         }
     });
     window.add_action(&activate_item);
+
+    // --- Connect to Server (Phase 4) ---
+    let ct = create_tab.clone();
+    let win = window.clone();
+    let connect_action = gio::SimpleAction::new("connect-to-server", None);
+    connect_action.connect_activate(move |_, _| {
+        let ct = ct.clone();
+        crate::widgets::network_dialog::show_connect_dialog(&win, move |uri| {
+            let ct = ct.clone();
+            crate::widgets::network_dialog::mount_and_navigate(&uri, move |path| {
+                ct(path);
+            });
+        });
+    });
+    window.add_action(&connect_action);
+
+    // --- Plugin actions (Phase 4) ---
+    let pe = plugin_engine.clone();
+    let gat_plugin = get_active_tab.clone();
+    let toast_plugin = toast_overlay.clone();
+    // Register each plugin action as a GIO action
+    {
+        let actions = pe.borrow().get_actions();
+        for action in actions {
+            let action_name = format!("plugin-{}", action.name);
+            let pe = pe.clone();
+            let gat = gat_plugin.clone();
+            let toast = toast_plugin.clone();
+            let name = action.name.clone();
+            let gio_action = gio::SimpleAction::new(&action_name, None);
+            gio_action.connect_activate(move |_, _| {
+                let selected = gat().map(|t| get_selected_paths(&t.selection_model)).unwrap_or_default();
+                let cwd = gat().map(|t| t.current_path()).unwrap_or_else(glib::home_dir);
+                if let Err(e) = pe.borrow().execute_action(&name, &selected, &cwd) {
+                    toast.add_toast(adw::Toast::new(&format!("Plugin error: {e}")));
+                }
+            });
+            window.add_action(&gio_action);
+        }
+    }
 
     // --- Shortcuts dialog ---
     let win = window.clone();

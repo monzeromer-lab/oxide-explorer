@@ -54,6 +54,10 @@ impl HeaderBar {
         view_section.append(Some("Miller Columns (F5)"), Some("win.toggle-miller"));
         primary_menu.append_section(None, &view_section);
 
+        let network_section = gio::Menu::new();
+        network_section.append(Some("Connect to Server..."), Some("win.connect-to-server"));
+        primary_menu.append_section(None, &network_section);
+
         let settings_section = gio::Menu::new();
         settings_section.append(Some("Preferences"), Some("win.preferences"));
         settings_section.append(Some("Keyboard Shortcuts"), Some("win.show-shortcuts"));

@@ -1,6 +1,7 @@
 mod app;
 mod models;
 mod operations;
+mod plugins;
 mod state;
 mod utils;
 mod widgets;

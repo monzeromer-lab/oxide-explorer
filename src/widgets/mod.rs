@@ -13,3 +13,6 @@ pub mod dual_pane;
 pub mod miller_columns;
 pub mod guide_window;
 pub mod about_dialog;
+pub mod network_dialog;
+#[allow(dead_code)]
+pub mod cloud_badge;
