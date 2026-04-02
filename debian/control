@@ -1,0 +1,17 @@
+Source: oxide-explorer
+Section: utils
+Priority: optional
+Maintainer: Monzer Omer <monzer.a.omer@gmail.com>
+Build-Depends: debhelper (>= 13), cargo, rustc, libgtk-4-dev, libadwaita-1-dev, libvte-2.91-gtk4-dev
+Standards-Version: 4.6.0
+Homepage: https://github.com/oxide-explorer/oxide-explorer
+
+Package: oxide-explorer
+Architecture: amd64
+Depends: libgtk-4-1, libadwaita-1-0, libvte-2.91-gtk4-0, ${shlibs:Depends}, ${misc:Depends}
+Description: Blazing-fast power-user file manager
+ Oxide Explorer is a GTK4/libadwaita file manager built with Rust,
+ designed for power users and developers. Features include tabbed
+ browsing, dual-pane mode, embedded terminal, Miller columns,
+ Lua plugin system, vim keybindings, advanced search, batch rename,
+ archive management, file tagging, and network drive support.

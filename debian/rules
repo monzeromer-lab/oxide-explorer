@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_build:
+	cargo build --release
+
+override_dh_auto_install:
+	install -Dm755 target/release/oxide-explorer debian/oxide-explorer/usr/bin/oxide-explorer
+	install -Dm644 data/style.css debian/oxide-explorer/usr/share/oxide-explorer/style.css
+	install -Dm644 data/com.oxide.explorer.desktop debian/oxide-explorer/usr/share/applications/com.oxide.explorer.desktop
+	install -Dm644 debian/copyright debian/oxide-explorer/usr/share/doc/oxide-explorer/copyright
+
+override_dh_auto_test:
+	# Skip tests during packaging

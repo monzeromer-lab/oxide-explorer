@@ -1,0 +1,22 @@
+oxide-explorer (0.4.0-1) unstable; urgency=low
+
+  * Phase 4 release
+  * Tabbed browsing with per-tab state
+  * Dual-pane Commander-style mode (F3)
+  * Embedded VTE terminal (F4)
+  * Miller columns Finder-style view (F5)
+  * Lua plugin system
+  * Network drive support (SMB, FTP, SFTP, WebDAV)
+  * Advanced search with regex and content search
+  * Batch file renamer
+  * Preview pane with text/image support
+  * Archive management (extract/compress)
+  * File tagging and color dots via xattr
+  * Cloud sync status detection
+  * Vim-style keybindings
+  * Customizable keyboard shortcuts
+  * Drag and drop file operations
+  * Bookmarks with persistence
+  * 30+ keyboard shortcuts
+
+ -- Monzer Omer <monzer.a.omer@gmail.com>  Wed, 02 Apr 2026 12:00:00 +0000

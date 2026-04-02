@@ -78,6 +78,9 @@ impl OxideWindow {
         let plugin_engine = Rc::new(RefCell::new(PluginEngine::new()));
         plugin_engine.borrow_mut().load_plugins();
 
+        // Preview pane (created early so create_tab can reference it)
+        let preview_pane = Rc::new(PreviewPane::new());
+
         // --- Create new tab function ---
         let create_tab: CreateTabFn = {
             let tabs = tabs.clone();
@@ -88,6 +91,7 @@ impl OxideWindow {
             let back_btn = header.back_btn.clone();
             let fwd_btn = header.forward_btn.clone();
             let pe = plugin_engine.clone();
+            let pp = preview_pane.clone();
 
             Rc::new(move |path: PathBuf| -> Rc<TabState> {
                 let tab = Rc::new(TabState::new(
@@ -112,6 +116,24 @@ impl OxideWindow {
                 let sel_det = tab.selection_model.clone();
                 tab.content.details_view.column_view.connect_activate(move |_, pos| {
                     handle_activate(&sel_det, pos, &nav_det, &load_det);
+                });
+
+                // Preview pane auto-update on selection change
+                let pp_sel = pp.clone();
+                let _sel_preview = tab.selection_model.clone();
+                tab.selection_model.connect_selection_changed(move |sel, _, _| {
+                    if pp_sel.is_visible() {
+                        for i in 0..sel.n_items() {
+                            if sel.is_selected(i) {
+                                if let Some(item) = sel.item(i) {
+                                    if let Some(entry) = item.downcast_ref::<FileEntry>() {
+                                        pp_sel.preview_file(&std::path::Path::new(&entry.path()));
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
                 });
 
                 // Context menu for this tab
@@ -372,9 +394,6 @@ impl OxideWindow {
             ps_close.set_visible_child_name("none");
             ps_close.set_visible(false);
         });
-
-        // Preview pane (Phase 3)
-        let preview_pane = Rc::new(PreviewPane::new());
 
         // Content area: tabs + panels vertically, preview pane to the right
         let content_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -1211,6 +1230,7 @@ fn setup_actions(
     let bb_ext = header.back_btn.clone();
     let fb_ext = header.forward_btn.clone();
     let tv_ext = tab_view.clone();
+    let toast_ext = toast_overlay.clone();
     let extract_action = gio::SimpleAction::new("extract-archive", None);
     extract_action.connect_activate(move |_, _| {
         if let Some(tab) = gat_extract() {
@@ -1218,9 +1238,13 @@ fn setup_actions(
             if let Some(archive) = paths.first() {
                 if crate::widgets::archive_ops::is_archive(archive) {
                     let load = make_load_for_tab(&tab, &bc_ext, &bb_ext, &fb_ext, &tv_ext);
+                    let toast = toast_ext.clone();
                     crate::widgets::archive_ops::show_extract_dialog(&win, archive, move |dest| {
+                        toast.add_toast(adw::Toast::new("Archive extracted"));
                         (load)(dest);
                     });
+                } else {
+                    toast_ext.add_toast(adw::Toast::new("Not an archive file"));
                 }
             }
         }
@@ -1234,6 +1258,7 @@ fn setup_actions(
     let bb_cmp = header.back_btn.clone();
     let fb_cmp = header.forward_btn.clone();
     let tv_cmp = tab_view.clone();
+    let toast_cmp = toast_overlay.clone();
     let compress_action = gio::SimpleAction::new("compress", None);
     compress_action.connect_activate(move |_, _| {
         if let Some(tab) = gat_compress() {
@@ -1241,7 +1266,9 @@ fn setup_actions(
             if !paths.is_empty() {
                 let load = make_load_for_tab(&tab, &bc_cmp, &bb_cmp, &fb_cmp, &tv_cmp);
                 let dir = tab.current_path();
+                let toast = toast_cmp.clone();
                 crate::widgets::archive_ops::show_compress_dialog(&win, &paths, move |_archive| {
+                    toast.add_toast(adw::Toast::new("Archive created"));
                     (load)(dir.clone());
                 });
             }
@@ -1277,6 +1304,17 @@ fn setup_actions(
         });
     });
     window.add_action(&connect_action);
+
+    // --- Reload Plugins ---
+    let pe_reload = plugin_engine.clone();
+    let toast_reload = toast_overlay.clone();
+    let reload_plugins_action = gio::SimpleAction::new("reload-plugins", None);
+    reload_plugins_action.connect_activate(move |_, _| {
+        pe_reload.borrow_mut().load_plugins();
+        let count = pe_reload.borrow().get_actions().len();
+        toast_reload.add_toast(adw::Toast::new(&format!("Plugins reloaded ({count} actions)")));
+    });
+    window.add_action(&reload_plugins_action);
 
     // --- Plugin actions (Phase 4) ---
     let pe = plugin_engine.clone();

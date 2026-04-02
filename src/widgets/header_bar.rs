@@ -56,6 +56,7 @@ impl HeaderBar {
 
         let network_section = gio::Menu::new();
         network_section.append(Some("Connect to Server..."), Some("win.connect-to-server"));
+        network_section.append(Some("Reload Plugins"), Some("win.reload-plugins"));
         primary_menu.append_section(None, &network_section);
 
         let settings_section = gio::Menu::new();

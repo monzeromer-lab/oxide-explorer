@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Oxide Explorer
+Comment=Blazing-fast power-user file manager
+Exec=oxide-explorer %U
+Icon=system-file-manager
+Terminal=false
+Type=Application
+Categories=System;FileManager;Utility;GTK;
+MimeType=inode/directory;
+Keywords=file;manager;explorer;files;folders;
+StartupNotify=true
