@@ -5,6 +5,7 @@ use std::path::Path;
 
 pub struct TerminalPanel {
     pub widget: gtk::Box,
+    pub close_btn: gtk::Button,
     #[cfg(feature = "terminal")]
     terminal: vte4::Terminal,
 }
@@ -16,6 +17,9 @@ impl TerminalPanel {
         let header = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         header.set_margin_start(8);
         header.set_margin_end(4);
+        header.set_margin_top(2);
+        header.set_margin_bottom(2);
+        header.add_css_class("terminal-header");
 
         let label = gtk::Label::new(Some("Terminal"));
         label.add_css_class("heading");
@@ -25,7 +29,7 @@ impl TerminalPanel {
 
         let close_btn = gtk::Button::from_icon_name("window-close-symbolic");
         close_btn.add_css_class("flat");
-        close_btn.set_tooltip_text(Some("Hide Terminal"));
+        close_btn.set_tooltip_text(Some("Hide Terminal (F4)"));
         header.append(&close_btn);
 
         let sep = gtk::Separator::new(gtk::Orientation::Horizontal);
@@ -70,19 +74,14 @@ impl TerminalPanel {
             container.append(&placeholder);
         }
 
-        // Close button is a no-op here; the panels_stack in window.rs handles visibility
-        close_btn.connect_clicked(move |_| {
-            // Handled by the panels stack toggle
-        });
-
         Self {
             widget: container,
+            close_btn,
             #[cfg(feature = "terminal")]
             terminal,
         }
     }
 
-    #[allow(dead_code)]
     pub fn focus(&self) {
         #[cfg(feature = "terminal")]
         self.terminal.grab_focus();

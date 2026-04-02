@@ -12,11 +12,11 @@ use crate::widgets::status_bar::StatusBar;
 
 /// One side of the dual-pane view
 pub struct PaneState {
-    pub _nav: Rc<RefCell<NavigationState>>,
+    pub nav: Rc<RefCell<NavigationState>>,
     pub file_model: FileListModel,
     pub filter: gtk::CustomFilter,
     pub filter_model: gtk::FilterListModel,
-    pub _selection_model: gtk::MultiSelection,
+    pub selection_model: gtk::MultiSelection,
     pub content: Rc<ContentView>,
     pub status_bar: Rc<StatusBar>,
     pub monitor: Rc<RefCell<Option<DirectoryMonitor>>>,
@@ -52,6 +52,8 @@ impl PaneState {
         path_label.set_margin_top(4);
         path_label.set_margin_bottom(2);
 
+        content.outer_stack.set_vexpand(true);
+
         let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
         container.append(&path_label);
         container.append(&content.outer_stack);
@@ -59,10 +61,15 @@ impl PaneState {
         container.set_hexpand(true);
         container.set_vexpand(true);
 
-        Self { _nav: nav, file_model, filter, filter_model, _selection_model: selection_model, content, status_bar, monitor, container, path_label }
+        Self { nav, file_model, filter, filter_model, selection_model, content, status_bar, monitor, container, path_label }
+    }
+
+    pub fn current_path(&self) -> PathBuf {
+        self.nav.borrow().current.clone()
     }
 
     pub fn load_directory(&self, path: PathBuf) {
+        self.nav.borrow_mut().navigate_to(path.clone());
         self.content.show_loading();
         self.path_label.set_text(&path.to_string_lossy());
 
@@ -75,13 +82,27 @@ impl PaneState {
 
         crate::window::load_path_async_pub(path, model, status, monitor, content, filter, filter_model);
     }
+
+    pub fn get_selected_paths(&self) -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+        let sel = &self.selection_model;
+        for i in 0..sel.n_items() {
+            if sel.is_selected(i) {
+                if let Some(item) = sel.item(i) {
+                    if let Some(entry) = item.downcast_ref::<FileEntry>() {
+                        paths.push(PathBuf::from(entry.path()));
+                    }
+                }
+            }
+        }
+        paths
+    }
 }
 
 pub struct DualPane {
     pub paned: gtk::Paned,
     pub left: Rc<PaneState>,
     pub right: Rc<PaneState>,
-    #[allow(dead_code)]
     pub active_side: Rc<Cell<Side>>,
 }
 
@@ -95,7 +116,7 @@ impl DualPane {
     pub fn new(show_hidden: Rc<Cell<bool>>, icon_size: Rc<Cell<i32>>) -> Self {
         let home = glib::home_dir();
         let left = Rc::new(PaneState::new(home.clone(), show_hidden.clone(), icon_size.clone()));
-        let right = Rc::new(PaneState::new(home, show_hidden, icon_size));
+        let right = Rc::new(PaneState::new(home, show_hidden.clone(), icon_size));
 
         let paned = gtk::Paned::new(gtk::Orientation::Horizontal);
         paned.set_start_child(Some(&left.container));
@@ -106,21 +127,71 @@ impl DualPane {
 
         let active_side = Rc::new(Cell::new(Side::Left));
 
-        // Click to focus a pane
+        // Click to focus a pane — update visual indicator
         let active = active_side.clone();
+        let left_c = left.container.clone();
+        let right_c = right.container.clone();
         let click_left = gtk::GestureClick::new();
-        click_left.connect_pressed(move |_, _, _, _| { active.set(Side::Left); });
+        click_left.connect_pressed(move |_, _, _, _| {
+            active.set(Side::Left);
+            left_c.add_css_class("pane-active");
+            right_c.remove_css_class("pane-active");
+        });
         left.container.add_controller(click_left);
 
         let active = active_side.clone();
+        let left_c = left.container.clone();
+        let right_c = right.container.clone();
         let click_right = gtk::GestureClick::new();
-        click_right.connect_pressed(move |_, _, _, _| { active.set(Side::Right); });
+        click_right.connect_pressed(move |_, _, _, _| {
+            active.set(Side::Right);
+            right_c.add_css_class("pane-active");
+            left_c.remove_css_class("pane-active");
+        });
         right.container.add_controller(click_right);
+
+        // Default: left is active
+        left.container.add_css_class("pane-active");
+
+        // Wire double-click navigation in each pane
+        Self::wire_pane_activate(&left, show_hidden.clone());
+        Self::wire_pane_activate(&right, show_hidden.clone());
 
         Self { paned, left, right, active_side }
     }
 
-    #[allow(dead_code)]
+    fn wire_pane_activate(pane: &Rc<PaneState>, _show_hidden: Rc<Cell<bool>>) {
+        // Icon view double-click
+        let pane_ref = pane.clone();
+        pane.content.icon_view.grid_view.connect_activate(move |_, pos| {
+            if let Some(item) = pane_ref.selection_model.item(pos) {
+                if let Some(entry) = item.downcast_ref::<FileEntry>() {
+                    let path = PathBuf::from(entry.path());
+                    if entry.is_dir() {
+                        pane_ref.load_directory(path);
+                    } else {
+                        crate::window::open_file(&path);
+                    }
+                }
+            }
+        });
+
+        // Details view double-click
+        let pane_ref = pane.clone();
+        pane.content.details_view.column_view.connect_activate(move |_, pos| {
+            if let Some(item) = pane_ref.selection_model.item(pos) {
+                if let Some(entry) = item.downcast_ref::<FileEntry>() {
+                    let path = PathBuf::from(entry.path());
+                    if entry.is_dir() {
+                        pane_ref.load_directory(path);
+                    } else {
+                        crate::window::open_file(&path);
+                    }
+                }
+            }
+        });
+    }
+
     pub fn active_pane(&self) -> &Rc<PaneState> {
         match self.active_side.get() {
             Side::Left => &self.left,
@@ -128,11 +199,25 @@ impl DualPane {
         }
     }
 
-    #[allow(dead_code)]
     pub fn inactive_pane(&self) -> &Rc<PaneState> {
         match self.active_side.get() {
             Side::Left => &self.right,
             Side::Right => &self.left,
+        }
+    }
+
+    pub fn swap_focus(&self) {
+        match self.active_side.get() {
+            Side::Left => {
+                self.active_side.set(Side::Right);
+                self.right.container.add_css_class("pane-active");
+                self.left.container.remove_css_class("pane-active");
+            }
+            Side::Right => {
+                self.active_side.set(Side::Left);
+                self.left.container.add_css_class("pane-active");
+                self.right.container.remove_css_class("pane-active");
+            }
         }
     }
 }

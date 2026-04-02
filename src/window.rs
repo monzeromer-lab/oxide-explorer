@@ -359,11 +359,16 @@ impl OxideWindow {
         });
 
         // --- Tab switching: update breadcrumb + nav buttons ---
+        // --- Phase 2 widgets (created early so tab-switch handler can reference them) ---
+        let terminal = Rc::new(TerminalPanel::new());
+        let dual_pane = Rc::new(DualPane::new(show_hidden.clone(), icon_size.clone()));
+        let miller = Rc::new(MillerColumnsView::new(|path| { open_file(&path); }));
+
         let breadcrumb_switch = breadcrumb.clone();
         let back_btn_switch = header.back_btn.clone();
         let fwd_btn_switch = header.forward_btn.clone();
         let tabs_switch = tabs.clone();
-        let _tab_view_switch = tab_view.clone();
+        let term_switch = terminal.clone();
         tab_view.connect_selected_page_notify(move |tv| {
             if let Some(page) = tv.selected_page() {
                 let child = page.child();
@@ -374,6 +379,9 @@ impl OxideWindow {
                     back_btn_switch.set_sensitive(n.can_go_back());
                     fwd_btn_switch.set_sensitive(n.can_go_forward());
                     drop(n);
+                    // Sync terminal CWD if visible
+                    term_switch.cd(&path);
+
                     // Update breadcrumb (set_path needs a navigate callback)
                     let tab2 = tab.clone();
                     let bb = back_btn_switch.clone();
@@ -407,11 +415,6 @@ impl OxideWindow {
             glib::Propagation::Stop
         });
 
-        // --- Phase 2 widgets ---
-        let terminal = Rc::new(TerminalPanel::new());
-        let dual_pane = Rc::new(DualPane::new(show_hidden.clone(), icon_size.clone()));
-        let miller = Rc::new(MillerColumnsView::new(|path| { open_file(&path); }));
-
         // --- Layout ---
         // Use a single Stack for bottom panels — only one visible at a time, or none.
         // "none" page is an empty zero-height widget.
@@ -427,6 +430,12 @@ impl OxideWindow {
         panels_stack.add_named(&miller.widget, Some("miller"));
         panels_stack.add_named(&terminal.widget, Some("terminal"));
         panels_stack.set_visible_child_name("none");
+
+        // Wire close buttons to hide panels
+        let ps_close = panels_stack.clone();
+        terminal.close_btn.connect_clicked(move |_| {
+            ps_close.set_visible_child_name("none");
+        });
 
         let content_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
         tab_view.set_vexpand(true);
@@ -496,7 +505,7 @@ fn handle_activate(
     }
 }
 
-fn open_file(path: &PathBuf) {
+pub fn open_file(path: &PathBuf) {
     let file = gio::File::for_path(path);
     let launcher = gtk::FileLauncher::new(Some(&file));
     launcher.launch(gtk::Window::NONE, gio::Cancellable::NONE, |result| {
@@ -962,6 +971,7 @@ fn setup_actions(
             if let Some(tab) = gat2() {
                 term.cd(&tab.current_path());
             }
+            term.focus();
         }
     });
     window.add_action(&toggle_term);
@@ -1003,6 +1013,87 @@ fn setup_actions(
         }
     });
     window.add_action(&toggle_miller);
+
+    // --- Dual pane: swap focus (Tab) ---
+    let dp = dual_pane.clone();
+    let swap_pane = gio::SimpleAction::new("swap-pane", None);
+    swap_pane.connect_activate(move |_, _| {
+        dp.swap_focus();
+    });
+    window.add_action(&swap_pane);
+
+    // --- Dual pane: copy selection to other pane (F6) ---
+    let dp = dual_pane.clone();
+    let toast = toast_overlay.clone();
+    let copy_to_pane = gio::SimpleAction::new("copy-to-other-pane", None);
+    copy_to_pane.connect_activate(move |_, _| {
+        let source = dp.active_pane();
+        let dest = dp.inactive_pane();
+        let paths = source.get_selected_paths();
+        if paths.is_empty() { return; }
+        let dest_dir = dest.current_path();
+        let toast = toast.clone();
+        let dest_pane = dest.clone();
+        for src in &paths {
+            let file_name = src.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            let dest_path = dest_dir.join(&file_name);
+            let src = src.clone();
+            let toast = toast.clone();
+            let dest_pane = dest_pane.clone();
+            glib::spawn_future_local(async move {
+                let result = crate::utils::runtime::spawn(async move {
+                    crate::operations::file_ops::copy_file(&src, &dest_path).await
+                }).await;
+                match result {
+                    Ok(Ok(())) => {
+                        dest_pane.load_directory(dest_pane.current_path());
+                        toast.add_toast(adw::Toast::new("Copied to other pane"));
+                    }
+                    Ok(Err(e)) => { toast.add_toast(adw::Toast::new(&format!("Copy failed: {e}"))); }
+                    Err(e) => { toast.add_toast(adw::Toast::new(&format!("Copy failed: {e}"))); }
+                }
+            });
+        }
+    });
+    window.add_action(&copy_to_pane);
+
+    // --- Dual pane: move selection to other pane (Shift+F6) ---
+    let dp = dual_pane.clone();
+    let toast = toast_overlay.clone();
+    let move_to_pane = gio::SimpleAction::new("move-to-other-pane", None);
+    move_to_pane.connect_activate(move |_, _| {
+        let source = dp.active_pane();
+        let dest = dp.inactive_pane();
+        let paths = source.get_selected_paths();
+        if paths.is_empty() { return; }
+        let dest_dir = dest.current_path();
+        let toast = toast.clone();
+        let dest_pane = dest.clone();
+        let src_pane = source.clone();
+        for src in &paths {
+            let file_name = src.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            let dest_path = dest_dir.join(&file_name);
+            let src = src.clone();
+            let toast = toast.clone();
+            let dest_pane = dest_pane.clone();
+            let src_pane = src_pane.clone();
+            glib::spawn_future_local(async move {
+                let result = crate::utils::runtime::spawn(async move {
+                    crate::operations::file_ops::move_file(&src, &dest_path).await
+                }).await;
+                match result {
+                    Ok(Ok(())) => {
+                        dest_pane.load_directory(dest_pane.current_path());
+                        src_pane.load_directory(src_pane.current_path());
+                        toast.add_toast(adw::Toast::new("Moved to other pane"));
+                    }
+                    Ok(Err(e)) => { toast.add_toast(adw::Toast::new(&format!("Move failed: {e}"))); }
+                    Err(e) => { toast.add_toast(adw::Toast::new(&format!("Move failed: {e}"))); }
+                }
+            });
+        }
+    });
+    window.add_action(&move_to_pane);
 
     // --- Vim-mode navigation helpers ---
     // select-next / select-prev for j/k navigation
@@ -1124,6 +1215,9 @@ fn setup_actions(
         ("F4", "win.toggle-terminal"),
         ("F3", "win.toggle-dual-pane"),
         ("F5", "win.toggle-miller"),
+        ("F6", "win.copy-to-other-pane"),
+        ("<Shift>F6", "win.move-to-other-pane"),
+        ("Tab", "win.swap-pane"),
         ("F1", "win.show-guide"),
         ("Return", "win.activate-item"),
     ];
@@ -1236,6 +1330,7 @@ fn show_shortcuts_window(parent: &adw::ApplicationWindow) {
         ("Ctrl++", "Zoom In"), ("Ctrl+-", "Zoom Out"), ("Ctrl+0", "Reset Zoom"),
         ("Alt+Enter", "Properties"), ("Ctrl+Alt+T", "Open Terminal"), ("Ctrl+,", "Preferences"),
         ("Ctrl+D", "Bookmark Folder"), ("Ctrl+T", "New Tab"), ("Ctrl+W", "Close Tab"),
+        ("F6", "Copy to Other Pane"), ("Shift+F6", "Move to Other Pane"), ("Tab", "Switch Pane"),
     ];
     for (i, (k, d)) in shortcuts.iter().enumerate() {
         let kl = gtk::Label::new(Some(k)); kl.set_halign(gtk::Align::Start); kl.add_css_class("dim-label"); grid.attach(&kl, 0, i as i32, 1, 1);

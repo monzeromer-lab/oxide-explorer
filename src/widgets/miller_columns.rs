@@ -11,14 +11,12 @@ use crate::utils::runtime;
 /// A single column in the Miller columns view
 struct MillerColumn {
     widget: gtk::ScrolledWindow,
-    _list_view: gtk::ListView,
     model: FileListModel,
     selection: gtk::SingleSelection,
-    path: PathBuf,
 }
 
 impl MillerColumn {
-    fn new(path: PathBuf) -> Self {
+    fn new(_path: PathBuf) -> Self {
         let model = FileListModel::new();
         let selection = gtk::SingleSelection::new(Some(model.clone()));
         selection.set_autoselect(false);
@@ -39,7 +37,6 @@ impl MillerColumn {
             label.set_hexpand(true);
             label.set_ellipsize(gtk::pango::EllipsizeMode::End);
             hbox.append(&label);
-            // Arrow indicator for directories
             let arrow = gtk::Image::from_icon_name("go-next-symbolic");
             arrow.set_pixel_size(12);
             arrow.set_visible(false);
@@ -70,12 +67,12 @@ impl MillerColumn {
         scrolled.set_width_request(250);
         scrolled.set_vexpand(true);
 
-        Self { widget: scrolled, _list_view: list_view, model, selection, path }
+        Self { widget: scrolled, model, selection }
     }
 
-    fn load(&self) {
+    fn load_path(&self, path: &PathBuf) {
         let model = self.model.clone();
-        let path = self.path.clone();
+        let path = path.clone();
         glib::spawn_future_local(async move {
             let result = runtime::spawn(async move {
                 read_dir::read_directory(&path).await
@@ -119,10 +116,7 @@ impl MillerColumnsView {
 
     pub fn navigate_to(&self, path: PathBuf) {
         // Clear existing columns
-        {
-            let mut cols = self.columns.borrow_mut();
-            cols.clear();
-        }
+        self.columns.borrow_mut().clear();
         while let Some(child) = self.columns_box.first_child() {
             self.columns_box.remove(&child);
         }
@@ -136,11 +130,23 @@ impl MillerColumnsView {
             if !current.is_dir() { continue; }
             self.add_column(current.clone(), i);
         }
+
+        // Auto-scroll to rightmost column
+        self.scroll_to_end();
+    }
+
+    fn scroll_to_end(&self) {
+        let scrolled = self.widget.clone();
+        // Defer scroll to after layout is computed
+        glib::idle_add_local_once(move || {
+            let adj = scrolled.hadjustment();
+            adj.set_value(adj.upper());
+        });
     }
 
     fn add_column(&self, path: PathBuf, depth: usize) {
         let col = MillerColumn::new(path.clone());
-        col.load();
+        col.load_path(&path);
 
         // Add separator between columns
         if depth > 0 {
@@ -153,6 +159,7 @@ impl MillerColumnsView {
         let columns_box = self.columns_box.clone();
         let columns = self.columns.clone();
         let on_open = self.on_file_open.clone();
+        let scrolled = self.widget.clone();
         let this_depth = depth;
 
         col.selection.connect_selection_changed(move |sel, _, _| {
@@ -166,7 +173,6 @@ impl MillerColumnsView {
                         let mut cols = columns.borrow_mut();
                         while cols.len() > this_depth + 1 {
                             cols.pop();
-                            // Remove last two children (separator + column)
                             if let Some(child) = columns_box.last_child() {
                                 columns_box.remove(&child);
                             }
@@ -176,14 +182,20 @@ impl MillerColumnsView {
                         }
 
                         // Add new column
-                        let new_col = MillerColumn::new(entry_path);
-                        new_col.load();
+                        let new_col = MillerColumn::new(entry_path.clone());
+                        new_col.load_path(&entry_path);
                         let sep = gtk::Separator::new(gtk::Orientation::Vertical);
                         columns_box.append(&sep);
                         columns_box.append(&new_col.widget);
                         cols.push(new_col);
+
+                        // Auto-scroll to show the new column
+                        let sw = scrolled.clone();
+                        glib::idle_add_local_once(move || {
+                            let adj = sw.hadjustment();
+                            adj.set_value(adj.upper());
+                        });
                     } else {
-                        // Open file
                         (on_open)(entry_path);
                     }
                 }
