@@ -20,6 +20,8 @@ mod imp {
         #[property(get, set)]
         is_dir: Cell<bool>,
         #[property(get, set)]
+        is_symlink: Cell<bool>,
+        #[property(get, set)]
         icon_name: RefCell<String>,
         #[property(get, set)]
         content_type: RefCell<String>,
@@ -46,6 +48,7 @@ impl FileEntry {
         size: u64,
         modified: i64,
         is_dir: bool,
+        is_symlink: bool,
         icon_name: &str,
         content_type: &str,
     ) -> Self {
@@ -55,6 +58,7 @@ impl FileEntry {
             .property("size", size)
             .property("modified", modified)
             .property("is-dir", is_dir)
+            .property("is-symlink", is_symlink)
             .property("icon-name", icon_name)
             .property("content-type", content_type)
             .build()

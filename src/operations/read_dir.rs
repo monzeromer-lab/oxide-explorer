@@ -7,6 +7,7 @@ pub struct DirEntry {
     pub size: u64,
     pub modified: i64,
     pub is_dir: bool,
+    pub is_symlink: bool,
     pub icon_name: String,
     pub content_type: String,
 }
@@ -23,6 +24,11 @@ pub async fn read_directory(path: &Path) -> Result<Vec<DirEntry>, std::io::Error
 
         let name = entry.file_name().to_string_lossy().into_owned();
         let is_dir = metadata.is_dir();
+        let is_symlink = entry
+            .file_type()
+            .await
+            .map(|ft| ft.is_symlink())
+            .unwrap_or(false);
         let size = if is_dir { 0 } else { metadata.len() };
         let modified = metadata
             .modified()
@@ -31,17 +37,7 @@ pub async fn read_directory(path: &Path) -> Result<Vec<DirEntry>, std::io::Error
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
 
-        let icon_name = if is_dir {
-            "folder".to_string()
-        } else {
-            guess_icon(&name)
-        };
-
-        let content_type = if is_dir {
-            "inode/directory".to_string()
-        } else {
-            guess_content_type(&name)
-        };
+        let (content_type, icon_name) = detect_content_type(&name, is_dir);
 
         entries.push(DirEntry {
             name,
@@ -49,6 +45,7 @@ pub async fn read_directory(path: &Path) -> Result<Vec<DirEntry>, std::io::Error
             size,
             modified,
             is_dir,
+            is_symlink,
             icon_name,
             content_type,
         });
@@ -65,39 +62,16 @@ pub async fn read_directory(path: &Path) -> Result<Vec<DirEntry>, std::io::Error
     Ok(entries)
 }
 
-fn guess_icon(name: &str) -> String {
-    let ext = name.rsplit('.').next().unwrap_or("").to_lowercase();
-    match ext.as_str() {
-        "rs" | "py" | "js" | "ts" | "c" | "cpp" | "h" | "java" | "go" | "rb" | "sh" => {
-            "text-x-generic-symbolic".to_string()
-        }
-        "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "bmp" => {
-            "image-x-generic-symbolic".to_string()
-        }
-        "mp4" | "mkv" | "avi" | "mov" | "webm" => "video-x-generic-symbolic".to_string(),
-        "mp3" | "flac" | "ogg" | "wav" | "aac" => "audio-x-generic-symbolic".to_string(),
-        "pdf" => "x-office-document-symbolic".to_string(),
-        "zip" | "tar" | "gz" | "xz" | "7z" | "rar" => {
-            "package-x-generic-symbolic".to_string()
-        }
-        "txt" | "md" | "log" | "toml" | "yaml" | "yml" | "json" | "xml" | "csv" => {
-            "text-x-generic-symbolic".to_string()
-        }
-        _ => "text-x-generic-symbolic".to_string(),
+fn detect_content_type(name: &str, is_dir: bool) -> (String, String) {
+    if is_dir {
+        return ("inode/directory".to_string(), "folder".to_string());
     }
-}
 
-fn guess_content_type(name: &str) -> String {
-    let ext = name.rsplit('.').next().unwrap_or("").to_lowercase();
-    match ext.as_str() {
-        "txt" => "text/plain",
-        "rs" => "text/x-rust",
-        "py" => "text/x-python",
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "pdf" => "application/pdf",
-        "zip" => "application/zip",
-        _ => "application/octet-stream",
-    }
-    .to_string()
+    // Use GIO content type detection for proper system theme icons
+    let (content_type, _uncertain) = gio::content_type_guess(Some(name), &[]);
+    let icon_name = gio::content_type_get_generic_icon_name(&content_type)
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "text-x-generic".to_string());
+
+    (content_type.to_string(), icon_name)
 }

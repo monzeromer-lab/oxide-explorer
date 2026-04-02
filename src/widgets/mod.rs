@@ -6,3 +6,5 @@ pub mod details_view;
 pub mod content_view;
 pub mod status_bar;
 pub mod filter_bar;
+pub mod properties_dialog;
+pub mod preferences_window;

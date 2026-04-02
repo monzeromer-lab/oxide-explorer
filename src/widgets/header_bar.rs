@@ -9,6 +9,9 @@ pub struct HeaderBar {
     pub hidden_toggle: gtk::ToggleButton,
     pub breadcrumb_box: gtk::Box,
     pub search_btn: gtk::ToggleButton,
+    pub zoom_in_btn: gtk::Button,
+    pub zoom_out_btn: gtk::Button,
+    pub menu_button: gtk::MenuButton,
 }
 
 impl HeaderBar {
@@ -40,6 +43,19 @@ impl HeaderBar {
         breadcrumb_box.set_hexpand(true);
         widget.set_title_widget(Some(&breadcrumb_box));
 
+        // --- Right side buttons ---
+
+        // Hamburger menu
+        let primary_menu = gio::Menu::new();
+        primary_menu.append(Some("Preferences"), Some("win.preferences"));
+        primary_menu.append(Some("Keyboard Shortcuts"), Some("win.show-shortcuts"));
+
+        let menu_button = gtk::MenuButton::new();
+        menu_button.set_icon_name("open-menu-symbolic");
+        menu_button.set_menu_model(Some(&primary_menu));
+        menu_button.set_tooltip_text(Some("Main Menu"));
+        widget.pack_end(&menu_button);
+
         // Hidden files toggle
         let hidden_toggle = gtk::ToggleButton::new();
         hidden_toggle.set_icon_name("view-reveal-symbolic");
@@ -58,6 +74,20 @@ impl HeaderBar {
         search_btn.set_tooltip_text(Some("Filter (Ctrl+F)"));
         widget.pack_end(&search_btn);
 
+        // Zoom controls
+        let zoom_box = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        zoom_box.add_css_class("linked");
+
+        let zoom_out_btn = gtk::Button::from_icon_name("zoom-out-symbolic");
+        zoom_out_btn.set_tooltip_text(Some("Zoom Out (Ctrl+-)"));
+        zoom_box.append(&zoom_out_btn);
+
+        let zoom_in_btn = gtk::Button::from_icon_name("zoom-in-symbolic");
+        zoom_in_btn.set_tooltip_text(Some("Zoom In (Ctrl++)"));
+        zoom_box.append(&zoom_in_btn);
+
+        widget.pack_end(&zoom_box);
+
         Self {
             widget,
             back_btn,
@@ -67,6 +97,9 @@ impl HeaderBar {
             hidden_toggle,
             breadcrumb_box,
             search_btn,
+            zoom_in_btn,
+            zoom_out_btn,
+            menu_button,
         }
     }
 }

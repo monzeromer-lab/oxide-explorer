@@ -1,4 +1,6 @@
 use gtk::prelude::*;
+use std::cell::Cell;
+use std::rc::Rc;
 
 use super::details_view::DetailsView;
 use super::icon_view::IconView;
@@ -9,18 +11,17 @@ pub struct ContentView {
     pub details_view: DetailsView,
     pub empty_view: adw::StatusPage,
     pub loading_spinner: gtk::Spinner,
-    /// Outer stack that switches between loading / content / empty
     pub outer_stack: gtk::Stack,
 }
 
 impl ContentView {
-    pub fn new(model: &impl IsA<gtk::SelectionModel>) -> Self {
+    pub fn new(model: &impl IsA<gtk::SelectionModel>, icon_size: Rc<Cell<i32>>) -> Self {
         // Inner stack: icon vs details
         let view_stack = gtk::Stack::new();
         view_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
         view_stack.set_transition_duration(150);
 
-        let icon_view = IconView::new(model);
+        let icon_view = IconView::new(model, icon_size);
         view_stack.add_named(&icon_view.widget, Some("icon"));
 
         let details_view = DetailsView::new(model);
@@ -87,6 +88,10 @@ impl ContentView {
     pub fn show_content(&self, item_count: u32) {
         self.loading_spinner.set_spinning(false);
         if item_count == 0 {
+            self.empty_view.set_icon_name(Some("folder-symbolic"));
+            self.empty_view.set_title("Folder is Empty");
+            self.empty_view
+                .set_description(Some("This directory contains no files."));
             self.outer_stack.set_visible_child_name("empty");
         } else {
             self.outer_stack.set_visible_child_name("content");
@@ -95,7 +100,8 @@ impl ContentView {
 
     pub fn show_error(&self, message: &str) {
         self.loading_spinner.set_spinning(false);
-        self.empty_view.set_icon_name(Some("dialog-error-symbolic"));
+        self.empty_view
+            .set_icon_name(Some("dialog-error-symbolic"));
         self.empty_view.set_title("Cannot Open Folder");
         self.empty_view.set_description(Some(message));
         self.outer_stack.set_visible_child_name("empty");
