@@ -83,7 +83,6 @@ impl PaneState {
 }
 
 pub struct DualPane {
-    pub widget: gtk::Revealer,
     pub paned: gtk::Paned,
     pub left: Rc<PaneState>,
     pub right: Rc<PaneState>,
@@ -122,20 +121,7 @@ impl DualPane {
         click_right.connect_pressed(move |_, _, _, _| { active.set(Side::Right); });
         right.container.add_controller(click_right);
 
-        let revealer = gtk::Revealer::new();
-        revealer.set_child(Some(&paned));
-        revealer.set_reveal_child(false);
-        revealer.set_transition_type(gtk::RevealerTransitionType::SlideDown);
-
-        Self { widget: revealer, paned, left, right, active_side }
-    }
-
-    pub fn toggle(&self) {
-        self.widget.set_reveal_child(!self.widget.reveals_child());
-    }
-
-    pub fn is_visible(&self) -> bool {
-        self.widget.reveals_child()
+        Self { paned, left, right, active_side }
     }
 
     pub fn active_pane(&self) -> &Rc<PaneState> {

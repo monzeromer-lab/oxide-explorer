@@ -412,26 +412,31 @@ impl OxideWindow {
         let dual_pane = Rc::new(DualPane::new(show_hidden.clone(), icon_size.clone()));
         let miller = Rc::new(MillerColumnsView::new(|path| { open_file(&path); }));
 
-        // Miller columns revealer
-        let miller_revealer = gtk::Revealer::new();
-        miller_revealer.set_child(Some(&miller.widget));
-        miller_revealer.set_reveal_child(false);
-        miller_revealer.set_transition_type(gtk::RevealerTransitionType::Crossfade);
-
         // --- Layout ---
-        // Main content area: tab_view (expands) + dual_pane + miller + terminal (all revealers)
-        tab_view.set_vexpand(true);
+        // Use a single Stack for bottom panels — only one visible at a time, or none.
+        // "none" page is an empty zero-height widget.
+        let panels_stack = gtk::Stack::new();
+        panels_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
+        panels_stack.set_transition_duration(100);
+        panels_stack.set_hhomogeneous(false);
+        panels_stack.set_vhomogeneous(false);
+        let empty_panel = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        empty_panel.set_height_request(0);
+        panels_stack.add_named(&empty_panel, Some("none"));
+        panels_stack.add_named(&dual_pane.paned, Some("dual-pane"));
+        panels_stack.add_named(&miller.widget, Some("miller"));
+        panels_stack.add_named(&terminal.widget, Some("terminal"));
+        panels_stack.set_visible_child_name("none");
 
-        let main_stack = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        main_stack.append(&tab_view);
-        main_stack.append(&dual_pane.widget);
-        main_stack.append(&miller_revealer);
-        main_stack.append(&terminal.widget);
+        let content_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        tab_view.set_vexpand(true);
+        content_box.append(&tab_view);
+        content_box.append(&panels_stack);
 
         let paned = gtk::Paned::new(gtk::Orientation::Horizontal);
         paned.set_position(200);
         paned.set_start_child(Some(&sidebar.widget));
-        paned.set_end_child(Some(&main_stack));
+        paned.set_end_child(Some(&content_box));
         paned.set_shrink_start_child(false);
         paned.set_resize_start_child(false);
 
@@ -462,7 +467,7 @@ impl OxideWindow {
             &terminal,
             &dual_pane,
             &miller,
-            &miller_revealer,
+            &panels_stack,
         );
 
         // --- Create initial tab ---
@@ -638,7 +643,7 @@ fn setup_actions(
     terminal: &Rc<TerminalPanel>,
     dual_pane: &Rc<DualPane>,
     miller: &Rc<MillerColumnsView>,
-    miller_revealer: &gtk::Revealer,
+    panels_stack: &gtk::Stack,
 ) {
     // Helper macro to reduce boilerplate
     macro_rules! active_sel {
@@ -944,13 +949,16 @@ fn setup_actions(
     window.add_action(&pref);
 
     // --- Toggle Terminal (F4) ---
+    let ps = panels_stack.clone();
     let term = terminal.clone();
     let gat2 = get_active_tab.clone();
     let toggle_term = gio::SimpleAction::new("toggle-terminal", None);
     toggle_term.connect_activate(move |_, _| {
-        term.toggle();
-        // Sync terminal to current directory
-        if term.is_visible() {
+        let current = ps.visible_child_name();
+        if current.as_deref() == Some("terminal") {
+            ps.set_visible_child_name("none");
+        } else {
+            ps.set_visible_child_name("terminal");
             if let Some(tab) = gat2() {
                 term.cd(&tab.current_path());
             }
@@ -959,12 +967,16 @@ fn setup_actions(
     window.add_action(&toggle_term);
 
     // --- Toggle Dual Pane (F3) ---
+    let ps = panels_stack.clone();
     let dp = dual_pane.clone();
     let gat3 = get_active_tab.clone();
     let toggle_dual = gio::SimpleAction::new("toggle-dual-pane", None);
     toggle_dual.connect_activate(move |_, _| {
-        dp.toggle();
-        if dp.is_visible() {
+        let current = ps.visible_child_name();
+        if current.as_deref() == Some("dual-pane") {
+            ps.set_visible_child_name("none");
+        } else {
+            ps.set_visible_child_name("dual-pane");
             if let Some(tab) = gat3() {
                 let path = tab.current_path();
                 dp.left.load_directory(path.clone());
@@ -975,14 +987,16 @@ fn setup_actions(
     window.add_action(&toggle_dual);
 
     // --- Toggle Miller Columns (F5) ---
-    let mr = miller_revealer.clone();
+    let ps = panels_stack.clone();
     let ml = miller.clone();
     let gat4 = get_active_tab.clone();
     let toggle_miller = gio::SimpleAction::new("toggle-miller", None);
     toggle_miller.connect_activate(move |_, _| {
-        let visible = mr.reveals_child();
-        mr.set_reveal_child(!visible);
-        if !visible {
+        let current = ps.visible_child_name();
+        if current.as_deref() == Some("miller") {
+            ps.set_visible_child_name("none");
+        } else {
+            ps.set_visible_child_name("miller");
             if let Some(tab) = gat4() {
                 ml.navigate_to(tab.current_path());
             }

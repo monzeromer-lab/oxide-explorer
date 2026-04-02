@@ -4,7 +4,7 @@ use vte4::prelude::*;
 use std::path::Path;
 
 pub struct TerminalPanel {
-    pub widget: gtk::Revealer,
+    pub widget: gtk::Box,
     #[cfg(feature = "terminal")]
     terminal: vte4::Terminal,
 }
@@ -70,32 +70,21 @@ impl TerminalPanel {
             container.append(&placeholder);
         }
 
-        let revealer = gtk::Revealer::new();
-        revealer.set_child(Some(&container));
-        revealer.set_reveal_child(false);
-        revealer.set_transition_type(gtk::RevealerTransitionType::SlideUp);
-
-        let rev = revealer.clone();
-        close_btn.connect_clicked(move |_| { rev.set_reveal_child(false); });
+        // Close button is a no-op here; the panels_stack in window.rs handles visibility
+        close_btn.connect_clicked(move |_| {
+            // Handled by the panels stack toggle
+        });
 
         Self {
-            widget: revealer,
+            widget: container,
             #[cfg(feature = "terminal")]
             terminal,
         }
     }
 
-    pub fn toggle(&self) {
-        let visible = self.widget.reveals_child();
-        self.widget.set_reveal_child(!visible);
+    pub fn focus(&self) {
         #[cfg(feature = "terminal")]
-        if !visible {
-            self.terminal.grab_focus();
-        }
-    }
-
-    pub fn is_visible(&self) -> bool {
-        self.widget.reveals_child()
+        self.terminal.grab_focus();
     }
 
     pub fn cd(&self, path: &Path) {

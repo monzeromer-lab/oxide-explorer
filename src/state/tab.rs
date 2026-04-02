@@ -86,9 +86,10 @@ impl TabState {
             status_for_sel.set_selection_info(count);
         });
 
-        // Container
+        // Container — must fill the entire tab page
         content.outer_stack.set_vexpand(true);
         let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        container.set_vexpand(true);
         container.append(&filter_bar.widget);
         container.append(&content.outer_stack);
         container.append(&status_bar.widget);

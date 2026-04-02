@@ -18,6 +18,7 @@ impl ContentView {
     pub fn new(model: &impl IsA<gtk::SelectionModel>, icon_size: Rc<Cell<i32>>) -> Self {
         // Inner stack: icon vs details
         let view_stack = gtk::Stack::new();
+        view_stack.set_vexpand(true);
         view_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
         view_stack.set_transition_duration(150);
 
@@ -52,6 +53,8 @@ impl ContentView {
 
         // Outer stack: loading / content / empty
         let outer_stack = gtk::Stack::new();
+        outer_stack.set_vexpand(true);
+        outer_stack.set_hexpand(true);
         outer_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
         outer_stack.set_transition_duration(100);
         outer_stack.add_named(&loading_box, Some("loading"));
